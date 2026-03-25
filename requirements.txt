@@ -1,6 +1,0 @@
-numpy
-pandas
-plotly
-python-dateutil
-six
-streamlit

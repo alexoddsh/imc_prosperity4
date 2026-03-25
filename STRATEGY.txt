@@ -15,10 +15,18 @@ STRATEGY IDEAS
 - derivatives
 - macroeconomic impacts
 
-THEORY DASHBOARD
+DASHBOARD IDEAS
 In OrderDepth we never see the takers as they never end up in the OB. We only see the makers. The trades data is used for
-the takers. 
+the takers. Basic intuition:
 
 1. Triangle (Taker) at the Ask: Someone just "lifted the offer." They bought aggressively.
 2. Triangle (Taker) at the Bid: Someone just "hit the bid." They sold aggressively.
 3. Square (Maker) Trade: This usually shows up when a large Taker order eats through multiple levels of the book, hitting several "resting" Maker orders in a row.
+
+So many clustered squares means some taker (whale) is aggressively eating the liquidity and if there are many triangles
+then there is and aggressive demand increase. 
+
+We plot ask quotes in red, bid quotes in blue for clear distinction. We do NOT want data smoothing, instead we want 
+a plot option where the line only changes when the numerical value actually changes. We then plot our own potential trades as crosses.
+
+The dashboard also needs 
