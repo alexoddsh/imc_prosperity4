@@ -9,7 +9,7 @@ import json
 import re
 import os
 
-st.set_page_config(page_title="Prosperity", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Prosperity", layout="wide", initial_sidebar_state="collapsed")
 
 # ── CSS ──────────────────────────────────────────────────────────────────────
 st.markdown("""<style>
@@ -18,100 +18,53 @@ st.markdown("""<style>
 html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
     overflow: hidden !important; margin: 0 !important; padding: 0 !important;
 }
-/* ─── NUKE sidebar toggle/collapse button ("keyboard_double_arrow" icon) ─── */
-[data-testid="stSidebar"] > div:first-child > button:first-child,
-[data-testid="stSidebarCollapseButton"],
-[data-testid="collapsedControl"],
+/* hide sidebar completely — we use columns instead */
+[data-testid="stSidebar"],
 [data-testid="stSidebarCollapsedControl"],
-button[kind="headerNoPadding"] { display: none !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important; }
-/* ─── sidebar → right, 260px, always open ─── */
-[data-testid="stSidebar"] {
-    order: 2 !important; left: auto !important; right: 0 !important;
-    width: 260px !important; min-width: 260px !important; max-width: 260px !important;
-    padding: 8px 10px !important; overflow-y: auto !important;
-    scrollbar-width: none !important; transform: none !important;
-    margin-top: 0 !important; top: 0 !important;
-}
-[data-testid="stSidebar"] > div:first-child { padding-top: 0 !important; }
-[data-testid="stSidebar"]::-webkit-scrollbar { display: none !important; }
-[data-testid="stSidebar"] [data-testid="stMarkdown"] p {
-    font-size: 10px !important; margin: 0 0 1px 0 !important; padding: 0 !important;
-    line-height: 1.3 !important; color: #666 !important;
-}
-[data-testid="stSidebar"] .stSelectbox,
-[data-testid="stSidebar"] .stMultiSelect,
-[data-testid="stSidebar"] .stTextInput {
-    margin-bottom: 4px !important;
-}
-[data-testid="stSidebar"] .stSelectbox > div > div,
-[data-testid="stSidebar"] .stMultiSelect > div > div,
-[data-testid="stSidebar"] .stTextInput > div > div > input {
-    font-size: 11px !important; padding: 2px 6px !important;
-    min-height: 26px !important; height: 26px !important;
-}
-[data-testid="stSidebar"] label {
-    font-size: 10px !important; margin: 0 !important; padding: 0 !important;
-    min-height: 0 !important;
-}
-[data-testid="stSidebar"] .stCheckbox {
-    margin: 0 !important; padding: 0 !important; min-height: 0 !important;
-}
-[data-testid="stSidebar"] .stCheckbox label {
-    gap: 3px !important; align-items: center !important; padding: 1px 0 !important;
-}
-[data-testid="stSidebar"] .stCheckbox label span {
-    font-size: 11px !important; padding: 0 !important; font-weight: 600 !important;
-}
-[data-testid="stSidebar"] .stCheckbox label div[data-testid="stCheckboxCheck"] {
-    width: 14px !important; height: 14px !important;
-}
-[data-testid="stSidebar"] button {
-    font-size: 11px !important; padding: 3px 8px !important;
-    min-height: 26px !important; height: 26px !important; line-height: 1 !important;
-}
-[data-testid="stSidebar"] .stSlider {
-    margin: 0 0 4px 0 !important; padding: 0 !important;
-}
-[data-testid="stSidebar"] hr { margin: 4px 0 !important; }
-/* info box */
-.info-box {
-    font-size: 10px !important; line-height: 1.3 !important;
-    border: 1px solid #ccc; padding: 3px 5px; margin: 4px 0;
-    background: #f8f8f8; font-family: 'IBM Plex Mono', monospace;
-}
-.info-box b { color: #000; }
-/* trader color grid */
-.tgrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; margin: 2px 0 4px 0; }
-.tgrid-cell {
-    font-size: 11px; font-weight: 700; text-align: center; padding: 4px 0;
-    border: 1px solid #888; font-family: 'IBM Plex Mono', monospace;
-}
-.tgrid-cell.off { opacity: 0.15; text-decoration: line-through; }
-/* main area */
-[data-testid="stMainBlockContainer"] {
-    padding: 0 2px 0 2px !important; max-width: 100% !important;
-}
-.stPlotlyChart { margin: 0 !important; padding: 0 !important; }
-/* ─── hide ALL streamlit chrome ─── */
+[data-testid="stSidebarCollapseButton"],
+button[kind="headerNoPadding"] { display: none !important; }
+/* hide all streamlit chrome */
 [data-testid="stHeader"],
 [data-testid="stToolbar"],
 [data-testid="stDecoration"],
 [data-testid="stBottomBlockContainer"],
 [data-testid="stStatusWidget"],
-[data-testid="manage-app-button"],
 div[data-testid="stAppDeployButton"],
 section[data-testid="stSidebarNav"],
 button[kind="header"],
-button[kind="headerNoPadding"],
-[data-testid="stSidebarCollapseButton"],
 iframe[title="streamlit_lottie"],
 footer, header { display: none !important; }
+/* main container */
+[data-testid="stMainBlockContainer"] {
+    padding: 0 !important; max-width: 100% !important;
+}
 div[data-testid="stVerticalBlockBorderWrapper"] { gap: 0 !important; padding: 0 !important; }
 div[data-testid="stVerticalBlock"] { gap: 0 !important; }
+.stPlotlyChart { margin: 0 !important; padding: 0 !important; }
 ::-webkit-scrollbar { display: none !important; }
 /* plotly modebar */
 .modebar { top: 2px !important; right: 2px !important; }
 .modebar-btn { font-size: 12px !important; padding: 2px !important; }
+/* right panel custom styling */
+.rpanel {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+    padding: 4px 6px; overflow-y: auto; scrollbar-width: none;
+    max-height: 100vh;
+}
+.rpanel::-webkit-scrollbar { display: none; }
+.rpanel label { font-size: 10px !important; color: #666; margin-bottom: 1px; display: block; }
+.info-box {
+    font-size: 10px; line-height: 1.3; border: 1px solid #ccc;
+    padding: 3px 5px; margin: 3px 0; background: #f8f8f8;
+}
+.info-box b { color: #000; }
+.tgrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; margin: 3px 0; }
+.tgrid-cell {
+    font-size: 11px; font-weight: 700; text-align: center; padding: 4px 0;
+    border: 1px solid #888;
+}
+.tgrid-cell.off { opacity: 0.15; text-decoration: line-through; }
+.sec-label { font-size: 10px; color: #888; margin: 4px 0 1px 0; }
 </style>""", unsafe_allow_html=True)
 
 FONT = "IBM Plex Mono, monospace"
@@ -228,6 +181,7 @@ def add_indicators(pdf):
 
 CAT_COLOR  = {"M": "#999999", "S": "#00FF00", "B": "#FF8C00", "I": "#FF0000", "F": "#FFD700"}
 CAT_BG     = {"M": "#bbb",    "S": "#00FF00", "B": "#FF8C00", "I": "#FF0000", "F": "#FFD700"}
+CAT_FG     = {"M": "#000",    "S": "#000",    "B": "#fff",    "I": "#fff",    "F": "#000"}
 CAT_SYMBOL = {"M": "square", "S": "triangle-up", "B": "triangle-up", "I": "triangle-up", "F": "cross"}
 CAT_SIZE   = {"M": 10, "S": 10, "B": 12, "I": 12, "F": 11}
 
@@ -309,16 +263,13 @@ def compute_position(tdf):
 # ── Chart builders ───────────────────────────────────────────────────────────
 
 def _hover_html(row):
-    """Tooltip: [BuyerCat] qty [SellerCat] @ price   t=xxx"""
     bc = _buyer_cat(row)
     sc = _seller_cat(row)
     q = int(row["quantity"])
     p = int(row["price"])
     t = int(row["timestamp"])
-    bc_bg = CAT_BG.get(bc, "#eee")
-    sc_bg = CAT_BG.get(sc, "#eee")
-    bc_fg = "#000" if bc in ("S", "F", "M") else "#fff"
-    sc_fg = "#000" if sc in ("S", "F", "M") else "#fff"
+    bc_bg, sc_bg = CAT_BG.get(bc, "#eee"), CAT_BG.get(sc, "#eee")
+    bc_fg, sc_fg = CAT_FG.get(bc, "#000"), CAT_FG.get(sc, "#000")
     return (
         f'<span style="background:{bc_bg};color:{bc_fg};padding:2px 6px;font-weight:700;font-size:15px">{bc}</span>'
         f'<span style="font-size:15px;font-weight:700;padding:0 4px">{q}</span>'
@@ -379,22 +330,15 @@ def build_main_chart(pdf, tdf, show_ob, show_cats, qty_range, indicators, norm_b
                 sub = sub[(sub["quantity"] >= qty_range[0]) & (sub["quantity"] <= qty_range[1])]
             if len(sub) == 0: continue
             ty = norm(sub["price"].values, sub["timestamp"])
-
             hover = [_hover_html(r) for _, r in sub.iterrows()]
-
             fig.add_trace(go.Scatter(
                 x=sub["timestamp"], y=ty, mode="markers",
-                marker=dict(
-                    size=CAT_SIZE[cat],
-                    color=CAT_COLOR[cat],
-                    symbol=CAT_SYMBOL[cat],
-                    line=dict(width=1, color="#000") if cat == "F" else dict(width=0.5, color="#333"),
-                ),
+                marker=dict(size=CAT_SIZE[cat], color=CAT_COLOR[cat], symbol=CAT_SYMBOL[cat],
+                    line=dict(width=1, color="#000") if cat == "F" else dict(width=0.5, color="#333")),
                 hovertext=hover, hoverinfo="text",
             ))
 
-    layout = {**CHART_LAYOUT, "height": h}
-    fig.update_layout(**layout)
+    fig.update_layout(**{**CHART_LAYOUT, "height": h})
     return fig
 
 
@@ -417,143 +361,139 @@ def build_pos_chart(pos_df, h):
     return fig
 
 
-# ── Sidebar (renders on right via CSS) ───────────────────────────────────────
+# ── Layout: charts left, controls right ──────────────────────────────────────
 
 sources = discover_sources()
 if not sources:
     st.warning("No data. Run a backtest or place CSVs in round dirs.")
     st.stop()
 
-sb = st.sidebar
+# Two columns: charts (wide) | controls (narrow)
+chart_col, ctrl_col = st.columns([5, 1], gap="small")
 
-sb.markdown("Source")
-selected_source = sb.selectbox("src", list(sources.keys()), label_visibility="collapsed")
-src = sources[selected_source]
-prices, trades = load_source(src["type"], src["path"])
+with ctrl_col:
+    selected_source = st.selectbox("Source", list(sources.keys()), label_visibility="collapsed")
+    src = sources[selected_source]
+    prices, trades = load_source(src["type"], src["path"])
 
-if prices is None or len(prices) == 0:
-    st.warning("No data.")
-    st.stop()
+    if prices is None or len(prices) == 0:
+        st.warning("No data.")
+        st.stop()
 
-products = sorted(prices["product"].unique())
-sb.markdown("Product")
-selected_product = sb.selectbox("prod", products, label_visibility="collapsed")
+    products = sorted(prices["product"].unique())
+    selected_product = st.selectbox("Product", products, label_visibility="collapsed")
 
-pdf = prices[prices["product"] == selected_product].copy().sort_values("timestamp")
-pdf = add_indicators(pdf)
+    pdf = prices[prices["product"] == selected_product].copy().sort_values("timestamp")
+    pdf = add_indicators(pdf)
 
-if trades is not None and len(trades) > 0:
-    tdf = trades[trades["symbol"] == selected_product].copy().sort_values("timestamp")
-    tdf = classify_trades(tdf, pdf)
-else:
-    tdf = None
+    if trades is not None and len(trades) > 0:
+        tdf = trades[trades["symbol"] == selected_product].copy().sort_values("timestamp")
+        tdf = classify_trades(tdf, pdf)
+    else:
+        tdf = None
 
-# Summary info box
-n_trades = len(tdf) if tdf is not None else 0
-n_own = len(tdf[tdf["is_own"]]) if tdf is not None and n_trades > 0 else 0
-final_pnl = pdf["profit_and_loss"].iloc[-1] if len(pdf) > 0 else 0
-ts_range = f"{int(pdf['timestamp'].min())}–{int(pdf['timestamp'].max())}" if len(pdf) > 0 else "–"
-sb.markdown(
-    f'<div class="info-box">'
-    f'<b>{selected_product}</b> | {ts_range}<br>'
-    f'trades: {n_trades} (own: {n_own}) | PnL: <b>{final_pnl:.0f}</b>'
-    f'</div>',
-    unsafe_allow_html=True
-)
+    # Info box
+    n_trades = len(tdf) if tdf is not None else 0
+    n_own = len(tdf[tdf["is_own"]]) if tdf is not None and n_trades > 0 else 0
+    final_pnl = pdf["profit_and_loss"].iloc[-1] if len(pdf) > 0 else 0
+    ts_range = f"{int(pdf['timestamp'].min())}–{int(pdf['timestamp'].max())}" if len(pdf) > 0 else "–"
+    st.markdown(
+        f'<div class="info-box">'
+        f'<b>{selected_product}</b> | {ts_range}<br>'
+        f'trades: {n_trades} (own: {n_own})<br>PnL: <b>{final_pnl:.0f}</b>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
 
-sb.markdown("Indicators")
-ind_options = ["Mid", "WallMid1", "WallMid2"]
-show_ind = sb.multiselect("ind", ind_options, default=[], label_visibility="collapsed")
+    # Indicators
+    st.markdown('<div class="sec-label">Indicators</div>', unsafe_allow_html=True)
+    ind_options = ["Mid", "WallMid1", "WallMid2"]
+    show_ind = st.multiselect("ind", ind_options, default=[], label_visibility="collapsed")
 
-sb.markdown("Normalize")
-norm_by = sb.selectbox("norm", ["None"] + ind_options, index=0, label_visibility="collapsed")
+    st.markdown('<div class="sec-label">Normalize</div>', unsafe_allow_html=True)
+    norm_by = st.selectbox("norm", ["None"] + ind_options, index=0, label_visibility="collapsed")
 
-sb.markdown("---")
+    # Trader grid
+    st.markdown('<div class="sec-label">Traders</div>', unsafe_allow_html=True)
+    show_ob = st.checkbox("OB", value=False)
+    all_on = st.checkbox("All", value=True)
 
-# Trader filter: OB + colored grid
-show_ob = sb.checkbox("OB", value=False, key="ob_toggle")
-all_on = sb.checkbox("All Traders", value=True, key="all_traders")
+    CAT_GRID = [("M", "#bbb", "#000"), ("S", "#00FF00", "#000"), ("B", "#FF8C00", "#fff"),
+                ("I", "#FF0000", "#fff"), ("F", "#FFD700", "#000")]
 
-CAT_GRID = [
-    ("M", "#bbb",    "#000"),
-    ("S", "#00FF00", "#000"),
-    ("B", "#FF8C00", "#fff"),
-    ("I", "#FF0000", "#fff"),
-    ("F", "#FFD700", "#000"),
-]
+    show_cats = []
+    gc = st.columns(5)
+    for i, (cat, bg, fg) in enumerate(CAT_GRID):
+        if gc[i].checkbox(cat, value=all_on, key=f"c_{cat}"):
+            show_cats.append(cat)
 
-show_cats = []
-grid_cols = sb.columns(5)
-for i, (cat, bg, fg) in enumerate(CAT_GRID):
-    if grid_cols[i].checkbox(cat, value=all_on, key=f"c_{cat}"):
-        show_cats.append(cat)
+    # Colored strip
+    cells = ""
+    for cat, bg, fg in CAT_GRID:
+        cls = "" if cat in show_cats else " off"
+        cells += f'<div class="tgrid-cell{cls}" style="background:{bg};color:{fg}">{cat}</div>'
+    st.markdown(f'<div class="tgrid">{cells}</div>', unsafe_allow_html=True)
 
-# Colored visual strip
-cells_html = ""
-for cat, bg, fg in CAT_GRID:
-    on = cat in show_cats
-    cls = "" if on else " off"
-    cells_html += f'<div class="tgrid-cell{cls}" style="background:{bg};color:{fg}">{cat}</div>'
-sb.markdown(f'<div class="tgrid">{cells_html}</div>', unsafe_allow_html=True)
+    # Qty filter
+    st.markdown('<div class="sec-label">Qty filter</div>', unsafe_allow_html=True)
+    max_q = int(tdf["quantity"].max()) if tdf is not None and len(tdf) > 0 else 100
+    qty_range = st.slider("qty", 0, max(max_q, 1), (0, max(max_q, 1)), label_visibility="collapsed")
 
-sb.markdown("Qty filter")
-max_q = int(tdf["quantity"].max()) if tdf is not None and len(tdf) > 0 else 100
-qty_range = sb.slider("qty", 0, max(max_q, 1), (0, max(max_q, 1)), label_visibility="collapsed")
+    # Backtest
+    st.markdown('<div class="sec-label">Backtest</div>', unsafe_allow_html=True)
+    algo_files = sorted(ALGOS_DIR.glob("*.py"))
+    algo_choices = {"algo.py": BASE_DIR / "algo.py"}
+    for f in algo_files:
+        if f.name != "datamodel.py":
+            algo_choices[f.name] = f
+    sel_algo = st.selectbox("algo", list(algo_choices.keys()), label_visibility="collapsed")
+    round_input = st.text_input("round", value="0", label_visibility="collapsed")
 
-sb.markdown("---")
-sb.markdown("Backtest")
-algo_files = sorted(ALGOS_DIR.glob("*.py"))
-algo_choices = {"algo.py": BASE_DIR / "algo.py"}
-for f in algo_files:
-    if f.name != "datamodel.py":
-        algo_choices[f.name] = f
-sel_algo = sb.selectbox("algo", list(algo_choices.keys()), label_visibility="collapsed")
-round_input = sb.text_input("round", value="0", label_visibility="collapsed")
+    bc1, bc2 = st.columns(2)
+    run_bt = bc1.button("Run")
+    run_pip = bc2.button("pip -U")
 
-c1, c2 = sb.columns(2)
-run_bt = c1.button("Run")
-run_pip = c2.button("pip -U")
+    if run_pip:
+        with st.spinner("..."):
+            r = subprocess.run(["pipenv", "run", "pip", "install", "-U", "prosperity4btx"],
+                capture_output=True, text=True, cwd=str(BASE_DIR))
+            st.success("OK" if r.returncode == 0 else "FAIL")
 
-if run_pip:
-    with st.spinner("..."):
-        r = subprocess.run(["pipenv", "run", "pip", "install", "-U", "prosperity4btx"],
-            capture_output=True, text=True, cwd=str(BASE_DIR))
-        sb.success("OK" if r.returncode == 0 else "FAIL")
+    if run_bt:
+        algo_path = algo_choices[sel_algo].resolve()
+        algo_dir = algo_path.parent
+        dm_link = algo_dir / "datamodel.py"
+        dm_src = BASE_DIR / "datamodel.py"
+        if algo_dir != BASE_DIR and not dm_link.exists() and dm_src.exists():
+            os.symlink(str(dm_src), str(dm_link))
+        ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_name = f"{ts_str}_{algo_path.stem}_r{round_input.replace(' ', '_')}.log"
+        out_path = BACKTESTS_DIR / out_name
+        cmd = ["pipenv", "run", "prosperity4btx", str(algo_path)] + round_input.split() + ["--out", str(out_path)]
+        with st.spinner("..."):
+            r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(BASE_DIR), timeout=120)
+            if r.returncode == 0:
+                st.success(out_name)
+                st.cache_data.clear()
+                st.rerun()
+            else:
+                st.error("FAIL")
+                st.code(r.stderr[-300:] if r.stderr else r.stdout[-300:])
 
-if run_bt:
-    algo_path = algo_choices[sel_algo].resolve()
-    algo_dir = algo_path.parent
-    dm_link = algo_dir / "datamodel.py"
-    dm_src = BASE_DIR / "datamodel.py"
-    if algo_dir != BASE_DIR and not dm_link.exists() and dm_src.exists():
-        os.symlink(str(dm_src), str(dm_link))
-    ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_name = f"{ts_str}_{algo_path.stem}_r{round_input.replace(' ', '_')}.log"
-    out_path = BACKTESTS_DIR / out_name
-    cmd = ["pipenv", "run", "prosperity4btx", str(algo_path)] + round_input.split() + ["--out", str(out_path)]
-    with st.spinner("..."):
-        r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(BASE_DIR), timeout=120)
-        if r.returncode == 0:
-            sb.success(out_name)
-            st.cache_data.clear()
-            st.rerun()
-        else:
-            sb.error("FAIL")
-            sb.code(r.stderr[-300:] if r.stderr else r.stdout[-300:])
+# ── Charts in left column ────────────────────────────────────────────────────
 
-# ── Main charts ──────────────────────────────────────────────────────────────
+with chart_col:
+    VH = 760
+    H_PRICE = int(VH * 0.60)
+    H_PNL = int(VH * 0.20)
+    H_POS = int(VH * 0.20)
 
-VH = 760
-H_PRICE = int(VH * 0.60)
-H_PNL = int(VH * 0.20)
-H_POS = int(VH * 0.20)
+    fig_main = build_main_chart(pdf, tdf, show_ob, show_cats, qty_range, show_ind, norm_by, H_PRICE)
+    st.plotly_chart(fig_main, width="stretch", config=PLOTLY_CONFIG)
 
-fig_main = build_main_chart(pdf, tdf, show_ob, show_cats, qty_range, show_ind, norm_by, H_PRICE)
-st.plotly_chart(fig_main, width="stretch", config=PLOTLY_CONFIG)
+    fig_pnl = build_pnl_chart(pdf, H_PNL)
+    st.plotly_chart(fig_pnl, width="stretch", config=PLOTLY_CONFIG)
 
-fig_pnl = build_pnl_chart(pdf, H_PNL)
-st.plotly_chart(fig_pnl, width="stretch", config=PLOTLY_CONFIG)
-
-pos_df = compute_position(tdf)
-fig_pos = build_pos_chart(pos_df, H_POS)
-st.plotly_chart(fig_pos, width="stretch", config=PLOTLY_CONFIG)
+    pos_df = compute_position(tdf)
+    fig_pos = build_pos_chart(pos_df, H_POS)
+    st.plotly_chart(fig_pos, width="stretch", config=PLOTLY_CONFIG)
