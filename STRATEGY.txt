@@ -5,8 +5,6 @@ ORDER/TRADING MECHANICS
 - Incoming order matched with most attractive price (oldest to newest)
 - 10,000 simulations on run day
 - Cannot send orders that in aggregate with current position is outside position limits
-
-TECHNICAL CHALLENGES
 - How to store data efficiently in tradingState?
 - The run method needs to generate a response within 900ms
 
@@ -17,10 +15,10 @@ STRATEGY IDEAS
 - derivatives
 - macroeconomic impacts
 
-SUPPORTED LIBS
-- [pandas](https://pandas.pydata.org/)
-- [NumPy](https://numpy.org/)
-- [statistics](https://docs.python.org/3.9/library/statistics.html)
-- [math](https://docs.python.org/3.9/library/math.html)
-- [typing](https://docs.python.org/3.9/library/typing.html)
-- [jsonpickle](https://jsonpickle.github.io/)
+THEORY DASHBOARD
+In OrderDepth we never see the takers as they never end up in the OB. We only see the makers. The trades data is used for
+the takers. 
+
+1. Triangle (Taker) at the Ask: Someone just "lifted the offer." They bought aggressively.
+2. Triangle (Taker) at the Bid: Someone just "hit the bid." They sold aggressively.
+3. Square (Maker) Trade: This usually shows up when a large Taker order eats through multiple levels of the book, hitting several "resting" Maker orders in a row.
