@@ -124,4 +124,11 @@ STRATEGY 2: THE INFORMED AGENT STRAT
 Historically it has been the case that some products have an informed agent on them, effectively buying and selling at or around
 the daily min max at similar quantities. We need a check in the dashboard that always runs to check for such. We will use 3 main
 identification rules. 
-    1. 
+
+    1. Quantity must be exactly 10 units or larger
+    2. price must equal or near equal day high/min 
+    3. correct direction, if low informed must be buying and vice versa
+    4. informed is likely classed as informed or taker 
+
+In the scan of old data this is easy. Then when we check for the actual detection in the real trading day we need to immedieately
+close any positions if we have a false positve.  
