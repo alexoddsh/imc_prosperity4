@@ -217,9 +217,6 @@ def compute_wallmid2(row):
     return (bb_p + ba_p) / 2 if pd.notna(bb_p) and pd.notna(ba_p) else np.nan
 
 
-def compute_agents_check(row):
-    
-
 def add_indicators(pdf):
     pdf = pdf.copy()
     pdf["wallmid1"] = pdf.apply(compute_wallmid1, axis=1)
