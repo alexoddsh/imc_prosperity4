@@ -9,7 +9,7 @@ import json
 import re
 import os
 
-st.set_page_config(page_title="Prosperity", layout="wide")
+st.set_page_config(page_title="Prosperity", layout="wide", initial_sidebar_state="expanded")
 
 # ── CSS ──────────────────────────────────────────────────────────────────────
 st.markdown("""<style>
@@ -18,13 +18,21 @@ st.markdown("""<style>
 html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
     overflow: hidden !important; margin: 0 !important; padding: 0 !important;
 }
-/* sidebar → right, 260px */
+/* ─── NUKE sidebar toggle/collapse button ("keyboard_double_arrow" icon) ─── */
+[data-testid="stSidebar"] > div:first-child > button:first-child,
+[data-testid="stSidebarCollapseButton"],
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapsedControl"],
+button[kind="headerNoPadding"] { display: none !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important; }
+/* ─── sidebar → right, 260px, always open ─── */
 [data-testid="stSidebar"] {
     order: 2 !important; left: auto !important; right: 0 !important;
     width: 260px !important; min-width: 260px !important; max-width: 260px !important;
-    padding: 6px 8px !important; overflow-y: auto !important;
-    scrollbar-width: none !important;
+    padding: 8px 10px !important; overflow-y: auto !important;
+    scrollbar-width: none !important; transform: none !important;
+    margin-top: 0 !important; top: 0 !important;
 }
+[data-testid="stSidebar"] > div:first-child { padding-top: 0 !important; }
 [data-testid="stSidebar"]::-webkit-scrollbar { display: none !important; }
 [data-testid="stSidebar"] [data-testid="stMarkdown"] p {
     font-size: 10px !important; margin: 0 0 1px 0 !important; padding: 0 !important;
@@ -33,67 +41,77 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
 [data-testid="stSidebar"] .stSelectbox,
 [data-testid="stSidebar"] .stMultiSelect,
 [data-testid="stSidebar"] .stTextInput {
-    margin-bottom: 6px !important;
+    margin-bottom: 4px !important;
 }
 [data-testid="stSidebar"] .stSelectbox > div > div,
 [data-testid="stSidebar"] .stMultiSelect > div > div,
 [data-testid="stSidebar"] .stTextInput > div > div > input {
-    font-size: 11px !important; padding: 3px 6px !important;
-    min-height: 28px !important; height: 28px !important;
+    font-size: 11px !important; padding: 2px 6px !important;
+    min-height: 26px !important; height: 26px !important;
 }
 [data-testid="stSidebar"] label {
     font-size: 10px !important; margin: 0 !important; padding: 0 !important;
+    min-height: 0 !important;
 }
-[data-testid="stSidebar"] .stCheckbox { margin: 0 !important; padding: 0 !important; }
+[data-testid="stSidebar"] .stCheckbox {
+    margin: 0 !important; padding: 0 !important; min-height: 0 !important;
+}
+[data-testid="stSidebar"] .stCheckbox label {
+    gap: 3px !important; align-items: center !important; padding: 1px 0 !important;
+}
 [data-testid="stSidebar"] .stCheckbox label span {
     font-size: 11px !important; padding: 0 !important; font-weight: 600 !important;
 }
 [data-testid="stSidebar"] .stCheckbox label div[data-testid="stCheckboxCheck"] {
-    width: 15px !important; height: 15px !important;
+    width: 14px !important; height: 14px !important;
 }
 [data-testid="stSidebar"] button {
     font-size: 11px !important; padding: 3px 8px !important;
-    min-height: 28px !important; height: 28px !important; line-height: 1 !important;
+    min-height: 26px !important; height: 26px !important; line-height: 1 !important;
 }
-[data-testid="stSidebar"] .stSlider { margin: 2px 0 6px 0 !important; padding: 0 !important; }
-[data-testid="stSidebar"] hr { margin: 6px 0 !important; }
+[data-testid="stSidebar"] .stSlider {
+    margin: 0 0 4px 0 !important; padding: 0 !important;
+}
+[data-testid="stSidebar"] hr { margin: 4px 0 !important; }
 /* info box */
 .info-box {
-    font-size: 11px !important; line-height: 1.4 !important;
-    border: 1px solid #ccc; padding: 4px 6px; margin-bottom: 6px;
+    font-size: 10px !important; line-height: 1.3 !important;
+    border: 1px solid #ccc; padding: 3px 5px; margin: 4px 0;
     background: #f8f8f8; font-family: 'IBM Plex Mono', monospace;
 }
 .info-box b { color: #000; }
+/* trader color grid */
+.tgrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; margin: 2px 0 4px 0; }
+.tgrid-cell {
+    font-size: 11px; font-weight: 700; text-align: center; padding: 4px 0;
+    border: 1px solid #888; font-family: 'IBM Plex Mono', monospace;
+}
+.tgrid-cell.off { opacity: 0.15; text-decoration: line-through; }
 /* main area */
 [data-testid="stMainBlockContainer"] {
     padding: 0 2px 0 2px !important; max-width: 100% !important;
 }
 .stPlotlyChart { margin: 0 !important; padding: 0 !important; }
-/* hide all streamlit chrome */
-[data-testid="stHeader"] { display: none !important; }
-[data-testid="stToolbar"] { display: none !important; }
-[data-testid="stDecoration"] { display: none !important; }
-[data-testid="stBottomBlockContainer"] { display: none !important; }
-[data-testid="stStatusWidget"] { display: none !important; }
-[data-testid="manage-app-button"] { display: none !important; }
-iframe[title="streamlit_lottie"] { display: none !important; }
+/* ─── hide ALL streamlit chrome ─── */
+[data-testid="stHeader"],
+[data-testid="stToolbar"],
+[data-testid="stDecoration"],
+[data-testid="stBottomBlockContainer"],
+[data-testid="stStatusWidget"],
+[data-testid="manage-app-button"],
+div[data-testid="stAppDeployButton"],
+section[data-testid="stSidebarNav"],
+button[kind="header"],
+button[kind="headerNoPadding"],
+[data-testid="stSidebarCollapseButton"],
+iframe[title="streamlit_lottie"],
+footer, header { display: none !important; }
 div[data-testid="stVerticalBlockBorderWrapper"] { gap: 0 !important; padding: 0 !important; }
 div[data-testid="stVerticalBlock"] { gap: 0 !important; }
-div[data-testid="stAppDeployButton"] { display: none !important; }
-section[data-testid="stSidebarNav"] { display: none !important; }
-button[kind="header"] { display: none !important; }
 ::-webkit-scrollbar { display: none !important; }
-/* plotly modebar compact */
+/* plotly modebar */
 .modebar { top: 2px !important; right: 2px !important; }
 .modebar-btn { font-size: 12px !important; padding: 2px !important; }
-/* trader grid */
-.tgrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; margin: 4px 0; }
-.tgrid-cell {
-    font-size: 11px; font-weight: 700; text-align: center; padding: 3px 0;
-    cursor: pointer; border: 1px solid #aaa; font-family: 'IBM Plex Mono', monospace;
-    user-select: none;
-}
-.tgrid-cell.off { opacity: 0.25; }
 </style>""", unsafe_allow_html=True)
 
 FONT = "IBM Plex Mono, monospace"
@@ -111,7 +129,7 @@ CHART_LAYOUT = dict(
     showlegend=False,
     xaxis=dict(gridcolor="#E8E8E8", zeroline=False, tickfont=dict(size=9)),
     yaxis=dict(gridcolor="#E8E8E8", zeroline=False, tickfont=dict(size=9)),
-    hoverlabel=dict(font=dict(family=FONT, size=14), namelength=-1),
+    hoverlabel=dict(font=dict(family=FONT, size=16), namelength=-1, bgcolor="white", bordercolor="#000"),
     dragmode="pan",
 )
 
@@ -199,6 +217,9 @@ def compute_wallmid2(row):
     return (bb_p + ba_p) / 2 if pd.notna(bb_p) and pd.notna(ba_p) else np.nan
 
 
+def compute_agents_check(row):
+    
+
 def add_indicators(pdf):
     pdf = pdf.copy()
     pdf["wallmid1"] = pdf.apply(compute_wallmid1, axis=1)
@@ -208,9 +229,10 @@ def add_indicators(pdf):
 
 # ── Trade classification ─────────────────────────────────────────────────────
 
-CAT_COLOR = {"M": "#999999", "S": "#00FF00", "B": "#FF8C00", "I": "#FF0000", "F": "#FFD700"}
-CAT_BG    = {"M": "#ddd",    "S": "#00FF00", "B": "#FF8C00", "I": "#FF0000", "F": "#FFD700"}
+CAT_COLOR  = {"M": "#999999", "S": "#00FF00", "B": "#FF8C00", "I": "#FF0000", "F": "#FFD700"}
+CAT_BG     = {"M": "#bbb",    "S": "#00FF00", "B": "#FF8C00", "I": "#FF0000", "F": "#FFD700"}
 CAT_SYMBOL = {"M": "square", "S": "triangle-up", "B": "triangle-up", "I": "triangle-up", "F": "cross"}
+CAT_SIZE   = {"M": 10, "S": 10, "B": 12, "I": 12, "F": 11}
 
 
 def classify_trades(tdf, pdf):
@@ -253,19 +275,16 @@ def classify_trades(tdf, pdf):
 
 
 def _buyer_cat(row):
-    """Infer buyer's category label."""
     if row["buyer"] == "SUBMISSION":
         return "F"
     if row.get("category") == "M":
         return "M"
-    # taker buy = bought at ask
     if row["price"] >= row.get("ask_price_1", float("inf")):
         return row.get("category", "?")
     return "M"
 
 
 def _seller_cat(row):
-    """Infer seller's category label."""
     if row["seller"] == "SUBMISSION":
         return "F"
     if row.get("category") == "M":
@@ -292,8 +311,8 @@ def compute_position(tdf):
 
 # ── Chart builders ───────────────────────────────────────────────────────────
 
-def _hover_html(row, cat):
-    """Build rich hover label like: M 15 S @ 2035  t=8500"""
+def _hover_html(row):
+    """Tooltip: [BuyerCat] qty [SellerCat] @ price   t=xxx"""
     bc = _buyer_cat(row)
     sc = _seller_cat(row)
     q = int(row["quantity"])
@@ -301,14 +320,14 @@ def _hover_html(row, cat):
     t = int(row["timestamp"])
     bc_bg = CAT_BG.get(bc, "#eee")
     sc_bg = CAT_BG.get(sc, "#eee")
-    bc_fg = "#000" if bc in ("S", "F") else "#fff"
-    sc_fg = "#000" if sc in ("S", "F") else "#fff"
+    bc_fg = "#000" if bc in ("S", "F", "M") else "#fff"
+    sc_fg = "#000" if sc in ("S", "F", "M") else "#fff"
     return (
-        f'<span style="background:{bc_bg};color:{bc_fg};padding:1px 4px;font-weight:700">{bc}</span>'
-        f' <b>{q}</b> '
-        f'<span style="background:{sc_bg};color:{sc_fg};padding:1px 4px;font-weight:700">{sc}</span>'
-        f' <b>@ {p}</b>'
-        f'<br><span style="color:#888">t={t}</span>'
+        f'<span style="background:{bc_bg};color:{bc_fg};padding:2px 6px;font-weight:700;font-size:15px">{bc}</span>'
+        f'<span style="font-size:15px;font-weight:700;padding:0 4px">{q}</span>'
+        f'<span style="background:{sc_bg};color:{sc_fg};padding:2px 6px;font-weight:700;font-size:15px">{sc}</span>'
+        f'<span style="font-size:15px;font-weight:700;padding:0 4px">@ {p}</span>'
+        f'<br><span style="color:#888;font-size:11px">t={t}</span>'
     )
 
 
@@ -364,13 +383,16 @@ def build_main_chart(pdf, tdf, show_ob, show_cats, qty_range, indicators, norm_b
             if len(sub) == 0: continue
             ty = norm(sub["price"].values, sub["timestamp"])
 
-            hover = [_hover_html(r, cat) for _, r in sub.iterrows()]
+            hover = [_hover_html(r) for _, r in sub.iterrows()]
 
             fig.add_trace(go.Scatter(
                 x=sub["timestamp"], y=ty, mode="markers",
-                marker=dict(size=8 if cat == "F" else 6, color=CAT_COLOR[cat],
+                marker=dict(
+                    size=CAT_SIZE[cat],
+                    color=CAT_COLOR[cat],
                     symbol=CAT_SYMBOL[cat],
-                    line=dict(width=0.5, color="#000") if cat == "F" else dict(width=0)),
+                    line=dict(width=1, color="#000") if cat == "F" else dict(width=0.5, color="#333"),
+                ),
                 hovertext=hover, hoverinfo="text",
             ))
 
@@ -407,7 +429,6 @@ if not sources:
 
 sb = st.sidebar
 
-# Info box at top
 sb.markdown("Source")
 selected_source = sb.selectbox("src", list(sources.keys()), label_visibility="collapsed")
 src = sources[selected_source]
@@ -452,33 +473,30 @@ norm_by = sb.selectbox("norm", ["None"] + ind_options, index=0, label_visibility
 
 sb.markdown("---")
 
-# Trader filter grid with colored cells
+# Trader filter: OB + colored grid
 show_ob = sb.checkbox("OB", value=False, key="ob_toggle")
 all_on = sb.checkbox("All Traders", value=True, key="all_traders")
 
 CAT_GRID = [
-    ("M", "#999"),
-    ("S", "#00FF00"),
-    ("B", "#FF8C00"),
-    ("I", "#FF0000"),
-    ("F", "#FFD700"),
+    ("M", "#bbb",    "#000"),
+    ("S", "#00FF00", "#000"),
+    ("B", "#FF8C00", "#fff"),
+    ("I", "#FF0000", "#fff"),
+    ("F", "#FFD700", "#000"),
 ]
 
 show_cats = []
 grid_cols = sb.columns(5)
-for i, (cat, color) in enumerate(CAT_GRID):
-    fg = "#000" if cat in ("S", "F", "M") else "#fff"
-    default = all_on
-    if grid_cols[i].checkbox(cat, value=default, key=f"c_{cat}"):
+for i, (cat, bg, fg) in enumerate(CAT_GRID):
+    if grid_cols[i].checkbox(cat, value=all_on, key=f"c_{cat}"):
         show_cats.append(cat)
 
-# Render colored visual strip matching the checkboxes
+# Colored visual strip
 cells_html = ""
-for cat, color in CAT_GRID:
+for cat, bg, fg in CAT_GRID:
     on = cat in show_cats
-    fg = "#000" if cat in ("S", "F", "M") else "#fff"
     cls = "" if on else " off"
-    cells_html += f'<div class="tgrid-cell{cls}" style="background:{color};color:{fg}">{cat}</div>'
+    cells_html += f'<div class="tgrid-cell{cls}" style="background:{bg};color:{fg}">{cat}</div>'
 sb.markdown(f'<div class="tgrid">{cells_html}</div>', unsafe_allow_html=True)
 
 sb.markdown("Qty filter")
