@@ -1,0 +1,26 @@
+
+
+ORDER/TRADING MECHANICS
+- Limit orders only
+- Incoming order matched with most attractive price (oldest to newest)
+- 10,000 simulations on run day
+- Cannot send orders that in aggregate with current position is outside position limits
+
+TECHNICAL CHALLENGES
+- How to store data efficiently in tradingState?
+- The run method needs to generate a response within 900ms
+
+STRATEGY IDEAS
+- stationary assets
+- drifting assets
+- baskets
+- derivatives
+- macroeconomic impacts
+
+SUPPORTED LIBS
+- [pandas](https://pandas.pydata.org/)
+- [NumPy](https://numpy.org/)
+- [statistics](https://docs.python.org/3.9/library/statistics.html)
+- [math](https://docs.python.org/3.9/library/math.html)
+- [typing](https://docs.python.org/3.9/library/typing.html)
+- [jsonpickle](https://jsonpickle.github.io/)
