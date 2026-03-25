@@ -83,7 +83,7 @@ With this lib the dashboard can seamlessy integrate the backtesting for us and s
 test in the controls covered above so that we can compare different tests. To figure out the ouput structure from the backtester you can A) look at the docs/files: https://github.com/Xeeshan85/imc-prosperity-4-backtester
 and B) we can run a backtest and check. 
 
- THE BASIC MARKET MAKING STRATEGY
+ STRATEGY 1: THE BASIC MARKET MAKING STRATEGY
  Each timestep, first take any favourable trades avaible against the mean. Then, place passive quotes (maker) slightly
  the current best bid and slightly below the current best ask. We should always be "inside" the market. IF inventory 
  becomes too skewed, flatten it.
@@ -107,7 +107,7 @@ and B) we can run a backtest and check.
 
  The idea is to ignore market noise, only trade when we see a price that deviates significantly from this liquidity wall.
  
- OTHER/WHEN TO AVOID?
+ HOW TO HEDGE
  When the bid ask spread is too low relative to the products average movement. This combined with larger vol
  means that the variance of the PnL increases. The jump problem is the adverse selection. Consider this:
   1. We have OB at T = 0, we see the OB state and decide that FV is 100 and place an ask of 101. 
@@ -118,3 +118,10 @@ and B) we can run a backtest and check.
   1. WallMid - look at the walls of volume. If ask wall is moving up shift up sell orders (ask) before we are hit. 
   2. Position Scaling - Balance the position around 0, if the position starts getting LONG for example, stop placing 
   buys entirely or decrease bids so much that only a big price drop fills them. This hedges exposure. 
+
+
+STRATEGY 2: THE INFORMED AGENT STRAT
+Historically it has been the case that some products have an informed agent on them, effectively buying and selling at or around
+the daily min max at similar quantities. We need a check in the dashboard that always runs to check for such. We will use 3 main
+identification rules. 
+    1. 
