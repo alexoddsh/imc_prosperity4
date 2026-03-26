@@ -16,8 +16,9 @@ st.markdown("""<style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 * { font-family: 'IBM Plex Mono', monospace !important; border-radius: 0 !important; }
 html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
-    overflow: hidden !important; margin: 0 !important; padding: 0 !important;
+    margin: 0 !important; padding: 0 !important;
 }
+[data-testid="stAppViewContainer"] { overflow: hidden !important; }
 [data-testid="stSidebar"],
 [data-testid="stSidebarCollapsedControl"],
 [data-testid="stSidebarCollapseButton"],
@@ -34,8 +35,12 @@ iframe[title="streamlit_lottie"],
 footer, header { display: none !important; }
 [data-testid="stMainBlockContainer"] { padding: 0 !important; max-width: 100% !important; }
 div[data-testid="stVerticalBlockBorderWrapper"] { gap: 0 !important; padding: 0 !important; }
-div[data-testid="stVerticalBlock"] { gap: 6px !important; }
 .stPlotlyChart { margin: 0 !important; padding: 0 !important; }
+/* chart column: tight spacing */
+[data-testid="stColumn"]:first-child div[data-testid="stVerticalBlock"] { gap: 2px !important; }
+/* control column: proper spacing + scrollable */
+[data-testid="stColumn"]:last-child { overflow-y: auto !important; max-height: 100vh !important; padding: 4px !important; }
+[data-testid="stColumn"]:last-child div[data-testid="stVerticalBlock"] { gap: 10px !important; }
 ::-webkit-scrollbar { display: none !important; }
 .modebar { top: 2px !important; right: 2px !important; }
 .modebar-btn { font-size: 12px !important; padding: 2px !important; }
@@ -61,7 +66,7 @@ CHART_LAYOUT = dict(
     paper_bgcolor="white", plot_bgcolor="white",
     margin=dict(t=0, b=18, l=40, r=0), showlegend=False,
     xaxis=dict(gridcolor="#E8E8E8", zeroline=False, tickfont=dict(size=9)),
-    yaxis=dict(gridcolor="#E8E8E8", zeroline=False, tickfont=dict(size=9)),
+    yaxis=dict(gridcolor="#E8E8E8", zeroline=False, tickfont=dict(size=9), tickformat=","),
     hoverlabel=dict(font=dict(family=FONT, size=16), namelength=-1, bgcolor="white", bordercolor="#000"),
     dragmode="pan",
 )
@@ -251,17 +256,23 @@ def build_main_chart(pdf, tdf, show_ob, show_cats, qty_range, indicators, norm_b
     if "Mid" in indicators:
         fig.add_trace(go.Scatter(x=ts, y=norm(pdf["mid_price"], ts), line=dict(color="#000000", width=1, dash="dash", shape="hv"), hoverinfo="skip"))
     if tdf is not None and len(tdf) > 0:
-        for cat in ["M", "S", "B", "I", "F"]:
-            if cat not in show_cats: continue
-            sub = tdf[tdf["category"] == cat]
-            if qty_range: sub = sub[(sub["quantity"] >= qty_range[0]) & (sub["quantity"] <= qty_range[1])]
-            if len(sub) == 0: continue
+        sub = tdf.copy()
+        if qty_range: sub = sub[(sub["quantity"] >= qty_range[0]) & (sub["quantity"] <= qty_range[1])]
+        if len(sub) > 0:
+            sub["buyer_cat"] = sub.apply(_buyer_cat, axis=1)
+            sub["seller_cat"] = sub.apply(_seller_cat, axis=1)
             ty = norm(sub["price"].values, sub["timestamp"])
             hover = [_hover_html(r) for _, r in sub.iterrows()]
-            fig.add_trace(go.Scatter(x=sub["timestamp"], y=ty, mode="markers",
-                marker=dict(size=CAT_SIZE[cat], color=CAT_COLOR[cat], symbol=CAT_SYMBOL[cat],
-                    line=dict(width=1, color="#000") if cat == "F" else dict(width=0.5, color="#333")),
-                hovertext=hover, hoverinfo="text"))
+            # render layers bottom-to-top: M (square) → S (tri) → B (tri) → I (tri) → F (cross)
+            for cat in ["M", "S", "B", "I", "F"]:
+                if cat not in show_cats: continue
+                mask = (sub["buyer_cat"] == cat) | (sub["seller_cat"] == cat)
+                if not mask.any(): continue
+                idx = mask.values
+                fig.add_trace(go.Scatter(x=sub["timestamp"][idx], y=ty[idx], mode="markers",
+                    marker=dict(size=CAT_SIZE[cat], color=CAT_COLOR[cat], symbol=CAT_SYMBOL[cat],
+                        line=dict(width=1, color="#000") if cat == "F" else dict(width=0.5, color="#333")),
+                    hovertext=[h for h, m in zip(hover, idx) if m], hoverinfo="text"))
     fig.update_layout(**{**CHART_LAYOUT, "height": h})
     return fig
 
@@ -320,17 +331,27 @@ with ctrl_col:
     st.markdown('<div class="sl">normalize</div>', unsafe_allow_html=True)
     norm_by = st.selectbox("n", ["None"] + ind_opts, index=0, label_visibility="collapsed")
 
-    # Traders — use multiselect instead of 5 cramped checkboxes
+    # Traders
     st.markdown('<div class="sl">traders</div>', unsafe_allow_html=True)
     show_ob = st.checkbox("OB", value=False)
-    show_cats = st.multiselect("t", ["M", "S", "B", "I", "F"], default=["M", "S", "B", "I", "F"], label_visibility="collapsed")
 
-    # Colored strip showing active/inactive
+    # Toggle buttons for categories
+    all_cats = [("M","#bbb","#000"),("S","#00FF00","#000"),("B","#FF8C00","#fff"),("I","#FF0000","#fff"),("F","#FFD700","#000")]
+    for cat, _, _ in all_cats:
+        if f"cat_{cat}" not in st.session_state: st.session_state[f"cat_{cat}"] = True
+    cat_cols = st.columns(len(all_cats))
+    for col, (cat, bg, fg) in zip(cat_cols, all_cats):
+        active = st.session_state[f"cat_{cat}"]
+        if col.button(cat, key=f"btn_{cat}", use_container_width=True):
+            st.session_state[f"cat_{cat}"] = not active
+            st.rerun()
+    # colored strip reflecting toggle state
     cells = ""
-    for cat, bg, fg in [("M","#bbb","#000"),("S","#00FF00","#000"),("B","#FF8C00","#fff"),("I","#FF0000","#fff"),("F","#FFD700","#000")]:
-        cls = "" if cat in show_cats else " off"
+    for cat, bg, fg in all_cats:
+        cls = "" if st.session_state[f"cat_{cat}"] else " off"
         cells += f'<div class="tc{cls}" style="background:{bg};color:{fg}">{cat}</div>'
     st.markdown(f'<div class="tg">{cells}</div>', unsafe_allow_html=True)
+    show_cats = [cat for cat, _, _ in all_cats if st.session_state[f"cat_{cat}"]]
 
     # Qty
     st.markdown('<div class="sl">qty filter</div>', unsafe_allow_html=True)
