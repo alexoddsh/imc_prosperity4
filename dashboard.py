@@ -15,54 +15,62 @@ st.set_page_config(page_title="Prosperity", layout="wide", initial_sidebar_state
 st.markdown("""<style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 * { font-family: 'IBM Plex Mono', monospace !important; border-radius: 0 !important; }
-html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
-    margin: 0 !important; padding: 0 !important;
-}
+html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"]
+    { margin: 0 !important; padding: 0 !important; }
 [data-testid="stAppViewContainer"] { overflow: hidden !important; }
-[data-testid="stSidebar"],
-[data-testid="stSidebarCollapsedControl"],
-[data-testid="stSidebarCollapseButton"],
-button[kind="headerNoPadding"] { display: none !important; }
-[data-testid="stHeader"],
-[data-testid="stToolbar"],
-[data-testid="stDecoration"],
-[data-testid="stBottomBlockContainer"],
-[data-testid="stStatusWidget"],
-div[data-testid="stAppDeployButton"],
-section[data-testid="stSidebarNav"],
-button[kind="header"],
-iframe[title="streamlit_lottie"],
+[data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"],
+[data-testid="stSidebarCollapseButton"], button[kind="headerNoPadding"],
+[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"],
+[data-testid="stBottomBlockContainer"], [data-testid="stStatusWidget"],
+div[data-testid="stAppDeployButton"], section[data-testid="stSidebarNav"],
+button[kind="header"], iframe[title="streamlit_lottie"],
 footer, header { display: none !important; }
 [data-testid="stMainBlockContainer"] { padding: 0 !important; max-width: 100% !important; }
 div[data-testid="stVerticalBlockBorderWrapper"] { gap: 0 !important; padding: 0 !important; }
 .stPlotlyChart { margin: 0 !important; padding: 0 !important; }
-/* chart column: tight spacing, small left pad */
-[data-testid="stColumn"]:first-child div[data-testid="stVerticalBlock"] { gap: 2px !important; }
-[data-testid="stColumn"]:first-child { padding-left: 6px !important; }
-/* control column: scrollable */
-[data-testid="stColumn"]:last-child { overflow-y: auto !important; max-height: 100vh !important; padding: 4px !important; }
-[data-testid="stColumn"]:last-child div[data-testid="stVerticalBlock"] { gap: 4px !important; }
 ::-webkit-scrollbar { display: none !important; }
 .modebar { top: 2px !important; right: 2px !important; }
 .modebar-btn { font-size: 12px !important; padding: 2px !important; }
-/* info box */
-.info-box { font-size: 12px; line-height: 1.4; border: 1px solid #ccc; padding: 5px 7px; margin: 0 0 2px 0; background: #f8f8f8; }
-.info-box b { color: #000; }
-/* section labels */
-.sl { font-size: 9px; color: #999; margin: 8px 0 1px 0; text-transform: uppercase; letter-spacing: 0.5px; }
-/* shrink widget text in ctrl column */
+
+/* ── chart column ── */
+[data-testid="stColumn"]:first-child div[data-testid="stVerticalBlock"]
+    { gap: 2px !important; }
+[data-testid="stColumn"]:first-child { padding-left: 6px !important; }
+
+/* ── control column ── */
+[data-testid="stColumn"]:last-child
+    { overflow-y: auto !important; max-height: 100vh !important; padding: 4px 6px !important; }
+[data-testid="stColumn"]:last-child div[data-testid="stVerticalBlock"]
+    { gap: 6px !important; }
+
+/* shrink all widget chrome in ctrl column */
 [data-testid="stColumn"]:last-child [data-baseweb="select"],
 [data-testid="stColumn"]:last-child [data-baseweb="select"] span,
 [data-testid="stColumn"]:last-child [data-baseweb="select"] div,
 [data-testid="stColumn"]:last-child [data-baseweb="select"] input,
 [data-testid="stColumn"]:last-child [data-baseweb="input"] input,
 [data-testid="stColumn"]:last-child .stCheckbox label span,
-[data-testid="stColumn"]:last-child .stSlider label,
-[data-testid="stColumn"]:last-child [data-baseweb="tag"] span { font-size: 11px !important; }
-[data-testid="stColumn"]:last-child [data-baseweb="select"] > div { min-height: 30px !important; }
-[data-testid="stColumn"]:last-child [data-baseweb="input"] input { padding: 4px 8px !important; }
-/* Run / pip buttons (2-col row) */
-[data-testid="stColumn"]:last-child button { font-size: 11px !important; padding: 2px 6px !important; min-height: 28px !important; }
+[data-testid="stColumn"]:last-child [data-baseweb="tag"] span
+    { font-size: 11px !important; }
+[data-testid="stColumn"]:last-child [data-baseweb="select"] > div
+    { min-height: 28px !important; display: flex !important; align-items: center !important; }
+[data-testid="stColumn"]:last-child [data-baseweb="input"] input
+    { padding: 3px 8px !important; font-size: 11px !important; }
+[data-testid="stColumn"]:last-child button
+    { font-size: 11px !important; padding: 2px 4px !important; min-height: 24px !important; }
+
+/* info box */
+.info-box { font-size: 12px; line-height: 1.4; border: 1px solid #ccc;
+    padding: 5px 7px; margin: 0; background: #f8f8f8; }
+.info-box b { color: #000; }
+
+/* section labels */
+.sl { font-size: 9px; color: #999; margin: 10px 0 1px 0;
+    text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* ── category toggle row: the only 5-col horizontal block ── */
+[data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(5):last-child)
+    { gap: 2px !important; }
 </style>""", unsafe_allow_html=True)
 
 FONT = "IBM Plex Mono, monospace"
@@ -76,7 +84,7 @@ CHART_LAYOUT = dict(
     font=dict(family=FONT, size=10),
     paper_bgcolor="white", plot_bgcolor="white",
     margin=dict(t=0, b=18, l=40, r=0), showlegend=False,
-    xaxis=dict(gridcolor="#E8E8E8", zeroline=False, tickfont=dict(size=9)),
+    xaxis=dict(gridcolor="#E8E8E8", zeroline=False, tickfont=dict(size=9), tickformat=","),
     yaxis=dict(gridcolor="#E8E8E8", zeroline=False, tickfont=dict(size=9), tickformat=","),
     hoverlabel=dict(font=dict(family=FONT, size=16), namelength=-1, bgcolor="white", bordercolor="#000"),
     dragmode="pan",
@@ -126,30 +134,49 @@ def load_source(st_type, st_path):
 
 # ── Indicators ───────────────────────────────────────────────────────────────
 
-def compute_wallmid1(row):
-    tpv, tv = 0.0, 0.0
+def compute_indicators(pdf):
+    """Vectorized wallmid1/wallmid2 computation."""
+    pdf = pdf.copy()
+    tpv, tv = np.zeros(len(pdf)), np.zeros(len(pdf))
     for i in range(1, 4):
-        bp, bv = row.get(f"bid_price_{i}"), row.get(f"bid_volume_{i}")
-        if pd.notna(bp) and pd.notna(bv): tpv += bp * abs(bv); tv += abs(bv)
-        ap, av = row.get(f"ask_price_{i}"), row.get(f"ask_volume_{i}")
-        if pd.notna(ap) and pd.notna(av): tpv += ap * abs(av); tv += abs(av)
-    return tpv / tv if tv > 0 else np.nan
+        for side, pcol, vcol in [("bid", f"bid_price_{i}", f"bid_volume_{i}"),
+                                  ("ask", f"ask_price_{i}", f"ask_volume_{i}")]:
+            if pcol in pdf.columns and vcol in pdf.columns:
+                p = pdf[pcol].values.astype(float)
+                v = np.abs(pdf[vcol].values.astype(float))
+                valid = np.isfinite(p) & np.isfinite(v)
+                tpv += np.where(valid, p * v, 0)
+                tv += np.where(valid, v, 0)
+    pdf["wallmid1"] = np.where(tv > 0, tpv / tv, np.nan)
 
-def compute_wallmid2(row):
-    bbp, bbv, bap, bav = np.nan, 0, np.nan, 0
+    best_bid_p, best_bid_v = np.full(len(pdf), np.nan), np.zeros(len(pdf))
+    best_ask_p, best_ask_v = np.full(len(pdf), np.nan), np.zeros(len(pdf))
     for i in range(1, 4):
-        bp, bv = row.get(f"bid_price_{i}"), row.get(f"bid_volume_{i}")
-        if pd.notna(bp) and pd.notna(bv) and abs(bv) > bbv: bbv = abs(bv); bbp = bp
-        ap, av = row.get(f"ask_price_{i}"), row.get(f"ask_volume_{i}")
-        if pd.notna(ap) and pd.notna(av) and abs(av) > bav: bav = abs(av); bap = ap
-    return (bbp + bap) / 2 if pd.notna(bbp) and pd.notna(bap) else np.nan
+        bp_col, bv_col = f"bid_price_{i}", f"bid_volume_{i}"
+        ap_col, av_col = f"ask_price_{i}", f"ask_volume_{i}"
+        if bp_col in pdf.columns and bv_col in pdf.columns:
+            bp = pdf[bp_col].values.astype(float)
+            bv = np.abs(pdf[bv_col].values.astype(float))
+            mask = np.isfinite(bp) & np.isfinite(bv) & (bv > best_bid_v)
+            best_bid_p = np.where(mask, bp, best_bid_p)
+            best_bid_v = np.where(mask, bv, best_bid_v)
+        if ap_col in pdf.columns and av_col in pdf.columns:
+            ap = pdf[ap_col].values.astype(float)
+            av = np.abs(pdf[av_col].values.astype(float))
+            mask = np.isfinite(ap) & np.isfinite(av) & (av > best_ask_v)
+            best_ask_p = np.where(mask, ap, best_ask_p)
+            best_ask_v = np.where(mask, av, best_ask_v)
+    both_valid = np.isfinite(best_bid_p) & np.isfinite(best_ask_p)
+    pdf["wallmid2"] = np.where(both_valid, (best_bid_p + best_ask_p) / 2, np.nan)
+    return pdf
 
 def toxic_buyer(pdf, tdf):
     min_price, max_price = tdf["price"].min(), tdf["price"].max()
     if len(tdf[tdf["price"] == min_price]) == 1 and len(tdf[tdf["price"] == max_price]) == 1:
-        min_qty, max_qty = tdf[tdf["price"] == min_price]["quantity"].item(), tdf[tdf["price"] == max_price]["quantity"].item()
-        min_time, max_time = tdf[tdf["price"] == min_price]["timestamp"].item(), tdf[tdf["price"] == max_price]["timestamp"].item() 
-        
+        min_qty = tdf[tdf["price"] == min_price]["quantity"].item()
+        max_qty = tdf[tdf["price"] == max_price]["quantity"].item()
+        min_time = tdf[tdf["price"] == min_price]["timestamp"].item()
+        max_time = tdf[tdf["price"] == max_price]["timestamp"].item()
         if min_qty == max_qty:
             if min_price == pdf[pdf["timestamp"] == min_time]["ask_price_1"] and max_price == pdf[pdf["timestamp"] == max_time]["bid_price_1"]:
                 return pd.Series({min_time: min_price, max_time: max_price})
@@ -157,13 +184,9 @@ def toxic_buyer(pdf, tdf):
         return pd.Series(dtype=float)
 
 def add_indicators(pdf, tdf):
-    pdf = pdf.copy()
-    pdf["wallmid1"] = pdf.apply(compute_wallmid1, axis=1)
-    pdf["wallmid2"] = pdf.apply(compute_wallmid2, axis=1)
-    
+    pdf = compute_indicators(pdf)
     signals = toxic_buyer(pdf, tdf)
     pdf["toxic_price"] = pdf["timestamp"].map(signals)
-    
     return pdf
 
 # ── Trade classification ─────────────────────────────────────────────────────
@@ -175,6 +198,7 @@ CAT_SYMBOL = {"M": "square", "S": "triangle-up", "B": "triangle-up", "I": "trian
 CAT_SIZE   = {"M": 10, "S": 10, "B": 12, "I": 12, "F": 11}
 
 def classify_trades(tdf, pdf):
+    """Vectorized trade classification."""
     if tdf is None or len(tdf) == 0: return tdf
     tdf = tdf.copy()
     tdf["is_own"] = (tdf["buyer"] == "SUBMISSION") | (tdf["seller"] == "SUBMISSION")
@@ -184,60 +208,62 @@ def classify_trades(tdf, pdf):
     else:
         tdf["bid_price_1"] = np.nan; tdf["ask_price_1"] = np.nan
     tdf["is_taker"] = (tdf["price"] > tdf["ask_price_1"]) | (tdf["price"] < tdf["bid_price_1"])
+
     pc = pdf[["timestamp", "mid_price"]].drop_duplicates("timestamp").sort_values("timestamp")
-    pc["mn"] = pc["mid_price"].shift(-1)
-    pc["mc"] = (pc["mn"] - pc["mid_price"]).abs()
-    med = pc["mc"].median(); thr = med * 3 if med > 0 else 1
-    pc["sig"] = pc["mc"] > thr
-    sm = pc.set_index("timestamp")["sig"].to_dict()
-    cats = []
-    for _, r in tdf.iterrows():
-        if r["is_own"]: cats.append("F")
-        elif not r["is_taker"]: cats.append("M")
-        else:
-            q = abs(r["quantity"])
-            if sm.get(r["timestamp"], False) and q >= 5: cats.append("I")
-            elif q >= 20: cats.append("B")
-            else: cats.append("S")
-    tdf["category"] = cats
+    mc = (pc["mid_price"].shift(-1) - pc["mid_price"]).abs()
+    med = mc.median(); thr = med * 3 if med > 0 else 1
+    sig_map = (mc > thr).set_axis(pc["timestamp"])
+    tdf["sig"] = tdf["timestamp"].map(sig_map).fillna(False)
+    qty = tdf["quantity"].abs()
+
+    cat = pd.Series("S", index=tdf.index)
+    cat = cat.where(tdf["is_taker"], "M")
+    cat = cat.where(~(tdf["is_taker"] & tdf["sig"] & (qty >= 5)), "I")
+    cat = cat.where(~(tdf["is_taker"] & ~(tdf["sig"] & (qty >= 5)) & (qty >= 20)), "B")
+    cat = cat.where(~tdf["is_own"], "F")
+    tdf["category"] = cat
+    tdf.drop(columns=["sig"], inplace=True)
     return tdf
 
-def _buyer_cat(r):
-    if r["buyer"] == "SUBMISSION": return "F"
-    if r.get("category") == "M": return "M"
-    if r["price"] >= r.get("ask_price_1", float("inf")): return r.get("category", "?")
-    return "M"
+def classify_sides(tdf):
+    """Vectorized buyer/seller side classification."""
+    buyer_cat = pd.Series("M", index=tdf.index)
+    taker_buy = (tdf["category"] != "M") & (tdf["price"] >= tdf["ask_price_1"])
+    buyer_cat = buyer_cat.where(~taker_buy, tdf["category"])
+    buyer_cat = buyer_cat.where(tdf["buyer"] != "SUBMISSION", "F")
 
-def _seller_cat(r):
-    if r["seller"] == "SUBMISSION": return "F"
-    if r.get("category") == "M": return "M"
-    if r["price"] <= r.get("bid_price_1", 0): return r.get("category", "?")
-    return "M"
+    seller_cat = pd.Series("M", index=tdf.index)
+    taker_sell = (tdf["category"] != "M") & (tdf["price"] <= tdf["bid_price_1"])
+    seller_cat = seller_cat.where(~taker_sell, tdf["category"])
+    seller_cat = seller_cat.where(tdf["seller"] != "SUBMISSION", "F")
+    return buyer_cat, seller_cat
 
 def compute_position(tdf):
     if tdf is None or len(tdf) == 0: return pd.DataFrame(columns=["timestamp", "position"])
-    own = tdf[tdf["is_own"]].sort_values("timestamp").copy()
+    own = tdf[tdf["is_own"]].sort_values("timestamp")
     if len(own) == 0: return pd.DataFrame(columns=["timestamp", "position"])
-    positions, pos = [], 0
-    for _, r in own.iterrows():
-        pos += r["quantity"] if r["buyer"] == "SUBMISSION" else -r["quantity"]
-        positions.append({"timestamp": r["timestamp"], "position": pos})
-    return pd.DataFrame(positions)
+    qty = own["quantity"].values.copy().astype(float)
+    qty[own["seller"].values == "SUBMISSION"] *= -1
+    return pd.DataFrame({"timestamp": own["timestamp"].values, "position": qty.cumsum()})
 
 # ── Chart builders ───────────────────────────────────────────────────────────
 
-def _hover_html(r):
-    bc, sc = _buyer_cat(r), _seller_cat(r)
-    q, p, t = int(r["quantity"]), int(r["price"]), int(r["timestamp"])
-    bbg, sbg = CAT_BG.get(bc, "#eee"), CAT_BG.get(sc, "#eee")
-    bfg, sfg = CAT_FG.get(bc, "#000"), CAT_FG.get(sc, "#000")
-    return (
-        f'<span style="background:{bbg};color:{bfg};padding:2px 6px;font-weight:700;font-size:15px">{bc}</span>'
-        f'<span style="font-size:15px;font-weight:700;padding:0 4px">{q}</span>'
-        f'<span style="background:{sbg};color:{sfg};padding:2px 6px;font-weight:700;font-size:15px">{sc}</span>'
-        f'<span style="font-size:15px;font-weight:700;padding:0 4px">@ {p}</span>'
-        f'<br><span style="color:#888;font-size:11px">t={t}</span>'
-    )
+def _hover_texts(sub):
+    """Vectorized hover text generation."""
+    texts = []
+    for _, r in sub.iterrows():
+        bc, sc = r["buyer_cat"], r["seller_cat"]
+        q, p, t = int(r["quantity"]), int(r["price"]), int(r["timestamp"])
+        bbg, sbg = CAT_BG.get(bc, "#eee"), CAT_BG.get(sc, "#eee")
+        bfg, sfg = CAT_FG.get(bc, "#000"), CAT_FG.get(sc, "#000")
+        texts.append(
+            f'<span style="background:{bbg};color:{bfg};padding:2px 6px;font-weight:700;font-size:15px">{bc}</span>'
+            f'<span style="font-size:15px;font-weight:700;padding:0 4px">{q}</span>'
+            f'<span style="background:{sbg};color:{sfg};padding:2px 6px;font-weight:700;font-size:15px">{sc}</span>'
+            f'<span style="font-size:15px;font-weight:700;padding:0 4px">@ {p}</span>'
+            f'<br><span style="color:#888;font-size:11px">t={t}</span>'
+        )
+    return texts
 
 def build_main_chart(pdf, tdf, show_ob, show_cats, qty_range, indicators, norm_by, h):
     nm = None
@@ -270,20 +296,17 @@ def build_main_chart(pdf, tdf, show_ob, show_cats, qty_range, indicators, norm_b
         sub = tdf.copy()
         if qty_range: sub = sub[(sub["quantity"] >= qty_range[0]) & (sub["quantity"] <= qty_range[1])]
         if len(sub) > 0:
-            sub["buyer_cat"] = sub.apply(_buyer_cat, axis=1)
-            sub["seller_cat"] = sub.apply(_seller_cat, axis=1)
+            sub["buyer_cat"], sub["seller_cat"] = classify_sides(sub)
             ty = norm(sub["price"].values, sub["timestamp"])
-            hover = [_hover_html(r) for _, r in sub.iterrows()]
-            # render layers bottom-to-top: M (square) → S (tri) → B (tri) → I (tri) → F (cross)
+            hover = _hover_texts(sub)
             for cat in ["M", "S", "B", "I", "F"]:
                 if cat not in show_cats: continue
-                mask = (sub["buyer_cat"] == cat) | (sub["seller_cat"] == cat)
+                mask = ((sub["buyer_cat"] == cat) | (sub["seller_cat"] == cat)).values
                 if not mask.any(): continue
-                idx = mask.values
-                fig.add_trace(go.Scatter(x=sub["timestamp"][idx], y=ty[idx], mode="markers",
+                fig.add_trace(go.Scatter(x=sub["timestamp"][mask], y=ty[mask], mode="markers",
                     marker=dict(size=CAT_SIZE[cat], color=CAT_COLOR[cat], symbol=CAT_SYMBOL[cat],
                         line=dict(width=1, color="#000") if cat == "F" else dict(width=0.5, color="#333")),
-                    hovertext=[h for h, m in zip(hover, idx) if m], hoverinfo="text"))
+                    hovertext=[h for h, m in zip(hover, mask) if m], hoverinfo="text"))
     fig.update_layout(**{**CHART_LAYOUT, "height": h})
     return fig
 
@@ -312,7 +335,6 @@ if not sources:
 chart_col, ctrl_col = st.columns([5, 1], gap="small")
 
 with ctrl_col:
-    # Load data first (needed for summary)
     selected_source = st.selectbox("Source", list(sources.keys()), label_visibility="collapsed")
     src = sources[selected_source]
     prices, trades = load_source(src["type"], src["path"])
@@ -328,54 +350,64 @@ with ctrl_col:
         tdf = classify_trades(tdf, pdf)
     pdf = add_indicators(pdf, tdf)
 
-    # Summary — above all other controls
+    # ── Summary (top, above all other controls) ──
     nt = len(tdf) if tdf is not None else 0
     no = len(tdf[tdf["is_own"]]) if tdf is not None and nt > 0 else 0
     fp = pdf["profit_and_loss"].iloc[-1] if len(pdf) > 0 else 0
     tr = f"{int(pdf['timestamp'].min())}–{int(pdf['timestamp'].max())}" if len(pdf) > 0 else "–"
-    st.markdown(f'<div class="info-box"><b>{selected_product}</b> | {tr}<br>trades: {nt} (own: {no})<br>Pnl: <b>{fp:.0f}</b></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="info-box"><b>{selected_product}</b> | {tr}<br>'
+                f'trades: {nt} (own: {no})<br>Pnl: <b>{fp:.0f}</b></div>', unsafe_allow_html=True)
 
-    # Indicators
+    # ── Indicators ──
     st.markdown('<div class="sl">indicators</div>', unsafe_allow_html=True)
     ind_opts = ["Mid", "WallMid1", "WallMid2"]
     show_ind = st.multiselect("i", ind_opts, default=[], label_visibility="collapsed")
 
-    # Normalize
+    # ── Normalize ──
     st.markdown('<div class="sl">normalize</div>', unsafe_allow_html=True)
     norm_by = st.selectbox("n", ["None"] + ind_opts, index=0, label_visibility="collapsed")
 
-    # Traders
+    # ── Traders ──
     st.markdown('<div class="sl">traders</div>', unsafe_allow_html=True)
     show_ob = st.checkbox("OB", value=False)
 
-    # Category toggles — colored buttons via CSS
-    all_cats = [("M","#FF8C00","#fff"),("S","#00FF00","#000"),("B","#FF8C00","#fff"),("I","#FF0000","#fff"),("F","#FFD700","#000")]
+    # ── Category toggles — colored buttons ──
+    all_cats = [("M", "#FF8C00", "#fff"), ("S", "#00FF00", "#000"),
+                ("B", "#FF8C00", "#fff"), ("I", "#FF0000", "#fff"), ("F", "#FFD700", "#000")]
     for cat, _, _ in all_cats:
-        if f"cat_{cat}" not in st.session_state: st.session_state[f"cat_{cat}"] = True
-    # Inject CSS to color each button by column position in the 5-col row
-    cat_css = ""
+        if f"cat_{cat}" not in st.session_state:
+            st.session_state[f"cat_{cat}"] = True
+
+    # dynamic CSS: color each button by nth-child in the 5-col row
+    cat_css = ('[data-testid="stHorizontalBlock"]'
+               ':has(> [data-testid="stColumn"]:nth-child(5):last-child)'
+               ' > [data-testid="stColumn"] button'
+               ' { font-weight:700 !important; font-size:11px !important;'
+               ' padding:1px 0 !important; min-height:0 !important; height:22px !important;'
+               ' border:1px solid #666 !important; }\n')
     for i, (cat, bg, fg) in enumerate(all_cats, 1):
         op = "1" if st.session_state[f"cat_{cat}"] else "0.2"
-        cat_css += (f'[data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(5):last-child)'
+        cat_css += (f'[data-testid="stHorizontalBlock"]'
+                    f':has(> [data-testid="stColumn"]:nth-child(5):last-child)'
                     f' > [data-testid="stColumn"]:nth-child({i}) button'
-                    f' {{ background:{bg} !important; color:{fg} !important; opacity:{op} !important;'
-                    f' font-weight:700 !important; font-size:11px !important; padding:3px 0 !important;'
-                    f' min-height:0 !important; height:26px !important; border:1px solid #888 !important; }}\n')
+                    f' {{ background:{bg} !important; color:{fg} !important; opacity:{op} !important; }}\n')
     st.markdown(f'<style>{cat_css}</style>', unsafe_allow_html=True)
+
     cat_cols = st.columns(len(all_cats))
     show_cats = []
-    for col, (cat, bg, fg) in zip(cat_cols, all_cats):
+    for col, (cat, _, _) in zip(cat_cols, all_cats):
         if col.button(cat, key=f"cat_{cat}_btn", use_container_width=True):
             st.session_state[f"cat_{cat}"] = not st.session_state[f"cat_{cat}"]
             st.rerun()
-        if st.session_state[f"cat_{cat}"]: show_cats.append(cat)
+        if st.session_state[f"cat_{cat}"]:
+            show_cats.append(cat)
 
-    # Qty filter
+    # ── Qty filter ──
     st.markdown('<div class="sl">qty filter</div>', unsafe_allow_html=True)
     max_q = int(tdf["quantity"].max()) if tdf is not None and len(tdf) > 0 else 100
     qty_range = st.slider("q", 0, max(max_q, 1), (0, max(max_q, 1)), label_visibility="collapsed")
 
-    # Algo / backtest
+    # ── Algo / backtest ──
     st.markdown('<div class="sl">algo</div>', unsafe_allow_html=True)
     algo_files = sorted(ALGOS_DIR.glob("*.py"))
     algo_choices = {"algo.py": BASE_DIR / "algo.py"}
