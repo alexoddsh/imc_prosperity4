@@ -300,11 +300,11 @@ with ctrl_col:
     selected_product = st.selectbox("Product", products, label_visibility="collapsed")
 
     pdf = prices[prices["product"] == selected_product].copy().sort_values("timestamp")
-    pdf = add_indicators(pdf)
     tdf = None
     if trades is not None and len(trades) > 0:
         tdf = trades[trades["symbol"] == selected_product].copy().sort_values("timestamp")
         tdf = classify_trades(tdf, pdf)
+    pdf = add_indicators(pdf, tdf)
 
     # Info
     nt = len(tdf) if tdf is not None else 0
