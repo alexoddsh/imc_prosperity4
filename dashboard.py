@@ -36,25 +36,33 @@ footer, header { display: none !important; }
 [data-testid="stMainBlockContainer"] { padding: 0 !important; max-width: 100% !important; }
 div[data-testid="stVerticalBlockBorderWrapper"] { gap: 0 !important; padding: 0 !important; }
 .stPlotlyChart { margin: 0 !important; padding: 0 !important; }
-/* chart column: tight spacing */
+/* chart column: tight spacing, small left pad */
 [data-testid="stColumn"]:first-child div[data-testid="stVerticalBlock"] { gap: 2px !important; }
-/* control column: proper spacing + scrollable */
+[data-testid="stColumn"]:first-child { padding-left: 6px !important; }
+/* control column: scrollable */
 [data-testid="stColumn"]:last-child { overflow-y: auto !important; max-height: 100vh !important; padding: 4px !important; }
-[data-testid="stColumn"]:last-child div[data-testid="stVerticalBlock"] { gap: 10px !important; }
+[data-testid="stColumn"]:last-child div[data-testid="stVerticalBlock"] { gap: 4px !important; }
 ::-webkit-scrollbar { display: none !important; }
 .modebar { top: 2px !important; right: 2px !important; }
 .modebar-btn { font-size: 12px !important; padding: 2px !important; }
-/* info + labels */
-.info-box { font-size: 12px; line-height: 1.4; border: 1px solid #ccc; padding: 5px 7px; margin: 0 0 4px 0; background: #f8f8f8; }
+/* info box */
+.info-box { font-size: 12px; line-height: 1.4; border: 1px solid #ccc; padding: 5px 7px; margin: 0 0 2px 0; background: #f8f8f8; }
 .info-box b { color: #000; }
-.sl { font-size: 9px; color: #999; margin: 4px 0 1px 0; text-transform: uppercase; letter-spacing: 0.5px; }
-/* shrink all widgets in the control column */
-[data-testid="stColumn"]:last-child [data-baseweb="select"] { font-size: 11px !important; }
-[data-testid="stColumn"]:last-child [data-baseweb="select"] > div { padding: 2px 8px !important; min-height: 28px !important; }
-[data-testid="stColumn"]:last-child [data-baseweb="input"] input { font-size: 11px !important; padding: 2px 8px !important; }
-[data-testid="stColumn"]:last-child .stCheckbox label { font-size: 11px !important; }
-[data-testid="stColumn"]:last-child .stSlider { font-size: 10px !important; }
-[data-testid="stColumn"]:last-child button { font-size: 11px !important; padding: 2px 8px !important; min-height: 28px !important; }
+/* section labels */
+.sl { font-size: 9px; color: #999; margin: 8px 0 1px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+/* shrink widget text in ctrl column */
+[data-testid="stColumn"]:last-child [data-baseweb="select"],
+[data-testid="stColumn"]:last-child [data-baseweb="select"] span,
+[data-testid="stColumn"]:last-child [data-baseweb="select"] div,
+[data-testid="stColumn"]:last-child [data-baseweb="select"] input,
+[data-testid="stColumn"]:last-child [data-baseweb="input"] input,
+[data-testid="stColumn"]:last-child .stCheckbox label span,
+[data-testid="stColumn"]:last-child .stSlider label,
+[data-testid="stColumn"]:last-child [data-baseweb="tag"] span { font-size: 11px !important; }
+[data-testid="stColumn"]:last-child [data-baseweb="select"] > div { min-height: 30px !important; }
+[data-testid="stColumn"]:last-child [data-baseweb="input"] input { padding: 4px 8px !important; }
+/* Run / pip buttons (2-col row) */
+[data-testid="stColumn"]:last-child button { font-size: 11px !important; padding: 2px 6px !important; min-height: 28px !important; }
 </style>""", unsafe_allow_html=True)
 
 FONT = "IBM Plex Mono, monospace"
@@ -304,12 +312,12 @@ if not sources:
 chart_col, ctrl_col = st.columns([5, 1], gap="small")
 
 with ctrl_col:
+    # Load data first (needed for summary)
     selected_source = st.selectbox("Source", list(sources.keys()), label_visibility="collapsed")
     src = sources[selected_source]
     prices, trades = load_source(src["type"], src["path"])
     if prices is None or len(prices) == 0:
         st.warning("No data."); st.stop()
-
     products = sorted(prices["product"].unique())
     selected_product = st.selectbox("Product", products, label_visibility="collapsed")
 
@@ -320,7 +328,7 @@ with ctrl_col:
         tdf = classify_trades(tdf, pdf)
     pdf = add_indicators(pdf, tdf)
 
-    # Summary — top of sidebar, larger text
+    # Summary — above all other controls
     nt = len(tdf) if tdf is not None else 0
     no = len(tdf[tdf["is_own"]]) if tdf is not None and nt > 0 else 0
     fp = pdf["profit_and_loss"].iloc[-1] if len(pdf) > 0 else 0
@@ -340,30 +348,34 @@ with ctrl_col:
     st.markdown('<div class="sl">traders</div>', unsafe_allow_html=True)
     show_ob = st.checkbox("OB", value=False)
 
-    # Category toggles — colored buttons
+    # Category toggles — colored buttons via CSS
     all_cats = [("M","#FF8C00","#fff"),("S","#00FF00","#000"),("B","#FF8C00","#fff"),("I","#FF0000","#fff"),("F","#FFD700","#000")]
     for cat, _, _ in all_cats:
         if f"cat_{cat}" not in st.session_state: st.session_state[f"cat_{cat}"] = True
+    # Inject CSS to color each button by column position in the 5-col row
+    cat_css = ""
+    for i, (cat, bg, fg) in enumerate(all_cats, 1):
+        op = "1" if st.session_state[f"cat_{cat}"] else "0.2"
+        cat_css += (f'[data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(5):last-child)'
+                    f' > [data-testid="stColumn"]:nth-child({i}) button'
+                    f' {{ background:{bg} !important; color:{fg} !important; opacity:{op} !important;'
+                    f' font-weight:700 !important; font-size:11px !important; padding:3px 0 !important;'
+                    f' min-height:0 !important; height:26px !important; border:1px solid #888 !important; }}\n')
+    st.markdown(f'<style>{cat_css}</style>', unsafe_allow_html=True)
     cat_cols = st.columns(len(all_cats))
+    show_cats = []
     for col, (cat, bg, fg) in zip(cat_cols, all_cats):
-        active = st.session_state[f"cat_{cat}"]
-        opacity = "1" if active else "0.15"
-        col.markdown(
-            f'<style>[data-testid="stButton"] > button#btn_{cat} '
-            f'{{ background:{bg} !important; color:{fg} !important; opacity:{opacity}; '
-            f'font-weight:700 !important; border:1px solid #888 !important; }}</style>',
-            unsafe_allow_html=True)
-        if col.button(cat, key=f"btn_{cat}", use_container_width=True):
-            st.session_state[f"cat_{cat}"] = not active
+        if col.button(cat, key=f"cat_{cat}_btn", use_container_width=True):
+            st.session_state[f"cat_{cat}"] = not st.session_state[f"cat_{cat}"]
             st.rerun()
-    show_cats = [cat for cat, _, _ in all_cats if st.session_state[f"cat_{cat}"]]
+        if st.session_state[f"cat_{cat}"]: show_cats.append(cat)
 
     # Qty filter
     st.markdown('<div class="sl">qty filter</div>', unsafe_allow_html=True)
     max_q = int(tdf["quantity"].max()) if tdf is not None and len(tdf) > 0 else 100
     qty_range = st.slider("q", 0, max(max_q, 1), (0, max(max_q, 1)), label_visibility="collapsed")
 
-    # Backtest
+    # Algo / backtest
     st.markdown('<div class="sl">algo</div>', unsafe_allow_html=True)
     algo_files = sorted(ALGOS_DIR.glob("*.py"))
     algo_choices = {"algo.py": BASE_DIR / "algo.py"}
