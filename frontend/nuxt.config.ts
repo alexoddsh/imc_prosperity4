@@ -8,25 +8,21 @@ export default defineNuxtConfig({
     }
   },
   
-  compatibilityDate: '2026-03-26',
+  compatibilityDate: '2024-04-03',
   
   devtools: { enabled: true },
   
-  css: ['/Users/alexoddsh/prosperity/frontend/assets/css/main.css'],
+  css: ['~/assets/css/main.css'],
 
   modules: ['@nuxtjs/supabase'],
 
   supabase: {
-    redirect: false, // Prevents Nuxt from forcing a login page immediately
-    url: process.env.SUPABASE_URL,
-    key: process.env.SUPABASE_KEY
+    redirect: false
   },
   
   runtimeConfig: {
     public: {
-      apiBase: process.env.NODE_ENV === 'production' 
-        ? 'https://your-backend-name.up.railway.app' 
-        : 'http://127.0.0.1:8000'
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000'
     }
   }
 })
