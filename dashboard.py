@@ -359,7 +359,7 @@ with ctrl_col:
                 f'trades: {nt} (own: {no})<br>Pnl: <b>{fp:.0f}</b></div>', unsafe_allow_html=True)
 
     # ── Indicators ──
-    st.markdown('<div class="sl">indicators</div>', unsafe_allow_html=True)
+    st.markdown('<div class="margin-top-10 sl">indicators</div>', unsafe_allow_html=True)
     ind_opts = ["Mid", "WallMid1", "WallMid2"]
     show_ind = st.multiselect("i", ind_opts, default=[], label_visibility="collapsed")
 

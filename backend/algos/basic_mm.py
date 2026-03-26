@@ -1,9 +1,25 @@
-from datamodel import OrderDepth, TradingState, Order
+from datamodel import OrderDepth, UserId, TradingState, Order
 from typing import List
+import json
 
+class Logger:
+    def __init__(self) -> None:
+        self.logs = ""
+
+    def print(self, *objects: any, sep: str = " ", end: str = "\n") -> None:
+        self.logs += sep.join(map(str, objects)) + end
+
+    def flush(self, state, orders, conversions, traderData):
+        print(json.dumps({
+            "sandboxLog": self.logs,
+            "lambdaLog": traderData,
+            "timestamp": state.timestamp,
+        }, separators=(",", ":")))
+        self.logs = ""
 
 class Trader:
     def run(self, state: TradingState):
+        self.logger = Logger()
         result = {}
 
         for product in state.order_depths:
@@ -51,4 +67,5 @@ class Trader:
 
             result[product] = orders
 
+        self.logger.flush(state, result, 0, "")
         return result, 0, ""
