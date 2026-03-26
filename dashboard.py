@@ -45,13 +45,16 @@ div[data-testid="stVerticalBlockBorderWrapper"] { gap: 0 !important; padding: 0 
 .modebar { top: 2px !important; right: 2px !important; }
 .modebar-btn { font-size: 12px !important; padding: 2px !important; }
 /* info + labels */
-.info-box { font-size: 10px; line-height: 1.3; border: 1px solid #ccc; padding: 3px 5px; margin: 3px 0; background: #f8f8f8; }
+.info-box { font-size: 12px; line-height: 1.4; border: 1px solid #ccc; padding: 5px 7px; margin: 0 0 4px 0; background: #f8f8f8; }
 .info-box b { color: #000; }
-.sl { font-size: 9px; color: #999; margin: 6px 0 2px 0; text-transform: uppercase; letter-spacing: 0.5px; }
-/* trader grid — pure HTML, no streamlit checkboxes */
-.tg { display: flex; gap: 3px; margin: 3px 0; flex-wrap: wrap; }
-.tc { font-size: 11px; font-weight: 700; text-align: center; padding: 3px 0; border: 1px solid #888; flex: 1; min-width: 30px; }
-.tc.off { opacity: 0.15; }
+.sl { font-size: 9px; color: #999; margin: 4px 0 1px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+/* shrink all widgets in the control column */
+[data-testid="stColumn"]:last-child [data-baseweb="select"] { font-size: 11px !important; }
+[data-testid="stColumn"]:last-child [data-baseweb="select"] > div { padding: 2px 8px !important; min-height: 28px !important; }
+[data-testid="stColumn"]:last-child [data-baseweb="input"] input { font-size: 11px !important; padding: 2px 8px !important; }
+[data-testid="stColumn"]:last-child .stCheckbox label { font-size: 11px !important; }
+[data-testid="stColumn"]:last-child .stSlider { font-size: 10px !important; }
+[data-testid="stColumn"]:last-child button { font-size: 11px !important; padding: 2px 8px !important; min-height: 28px !important; }
 </style>""", unsafe_allow_html=True)
 
 FONT = "IBM Plex Mono, monospace"
@@ -157,9 +160,9 @@ def add_indicators(pdf, tdf):
 
 # ── Trade classification ─────────────────────────────────────────────────────
 
-CAT_COLOR  = {"M": "#999999", "S": "#00FF00", "B": "#FF8C00", "I": "#FF0000", "F": "#FFD700"}
-CAT_BG     = {"M": "#bbb",    "S": "#00FF00", "B": "#FF8C00", "I": "#FF0000", "F": "#FFD700"}
-CAT_FG     = {"M": "#000",    "S": "#000",    "B": "#fff",    "I": "#fff",    "F": "#000"}
+CAT_COLOR  = {"M": "#FF8C00", "S": "#00FF00", "B": "#FF8C00", "I": "#FF0000", "F": "#FFD700"}
+CAT_BG     = {"M": "#FF8C00", "S": "#00FF00", "B": "#FF8C00", "I": "#FF0000", "F": "#FFD700"}
+CAT_FG     = {"M": "#fff",    "S": "#000",    "B": "#fff",    "I": "#fff",    "F": "#000"}
 CAT_SYMBOL = {"M": "square", "S": "triangle-up", "B": "triangle-up", "I": "triangle-up", "F": "cross"}
 CAT_SIZE   = {"M": 10, "S": 10, "B": 12, "I": 12, "F": 11}
 
@@ -317,17 +320,19 @@ with ctrl_col:
         tdf = classify_trades(tdf, pdf)
     pdf = add_indicators(pdf, tdf)
 
-    # Info
+    # Summary — top of sidebar, larger text
     nt = len(tdf) if tdf is not None else 0
     no = len(tdf[tdf["is_own"]]) if tdf is not None and nt > 0 else 0
     fp = pdf["profit_and_loss"].iloc[-1] if len(pdf) > 0 else 0
     tr = f"{int(pdf['timestamp'].min())}–{int(pdf['timestamp'].max())}" if len(pdf) > 0 else "–"
-    st.markdown(f'<div class="info-box"><b>{selected_product}</b> {tr}<br>trades:{nt} own:{no} PnL:<b>{fp:.0f}</b></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="info-box"><b>{selected_product}</b> | {tr}<br>trades: {nt} (own: {no})<br>Pnl: <b>{fp:.0f}</b></div>', unsafe_allow_html=True)
 
-    # Indicators + normalize
+    # Indicators
     st.markdown('<div class="sl">indicators</div>', unsafe_allow_html=True)
     ind_opts = ["Mid", "WallMid1", "WallMid2"]
     show_ind = st.multiselect("i", ind_opts, default=[], label_visibility="collapsed")
+
+    # Normalize
     st.markdown('<div class="sl">normalize</div>', unsafe_allow_html=True)
     norm_by = st.selectbox("n", ["None"] + ind_opts, index=0, label_visibility="collapsed")
 
@@ -335,36 +340,37 @@ with ctrl_col:
     st.markdown('<div class="sl">traders</div>', unsafe_allow_html=True)
     show_ob = st.checkbox("OB", value=False)
 
-    # Toggle buttons for categories
-    all_cats = [("M","#bbb","#000"),("S","#00FF00","#000"),("B","#FF8C00","#fff"),("I","#FF0000","#fff"),("F","#FFD700","#000")]
+    # Category toggles — colored buttons
+    all_cats = [("M","#FF8C00","#fff"),("S","#00FF00","#000"),("B","#FF8C00","#fff"),("I","#FF0000","#fff"),("F","#FFD700","#000")]
     for cat, _, _ in all_cats:
         if f"cat_{cat}" not in st.session_state: st.session_state[f"cat_{cat}"] = True
     cat_cols = st.columns(len(all_cats))
     for col, (cat, bg, fg) in zip(cat_cols, all_cats):
         active = st.session_state[f"cat_{cat}"]
+        opacity = "1" if active else "0.15"
+        col.markdown(
+            f'<style>[data-testid="stButton"] > button#btn_{cat} '
+            f'{{ background:{bg} !important; color:{fg} !important; opacity:{opacity}; '
+            f'font-weight:700 !important; border:1px solid #888 !important; }}</style>',
+            unsafe_allow_html=True)
         if col.button(cat, key=f"btn_{cat}", use_container_width=True):
             st.session_state[f"cat_{cat}"] = not active
             st.rerun()
-    # colored strip reflecting toggle state
-    cells = ""
-    for cat, bg, fg in all_cats:
-        cls = "" if st.session_state[f"cat_{cat}"] else " off"
-        cells += f'<div class="tc{cls}" style="background:{bg};color:{fg}">{cat}</div>'
-    st.markdown(f'<div class="tg">{cells}</div>', unsafe_allow_html=True)
     show_cats = [cat for cat, _, _ in all_cats if st.session_state[f"cat_{cat}"]]
 
-    # Qty
+    # Qty filter
     st.markdown('<div class="sl">qty filter</div>', unsafe_allow_html=True)
     max_q = int(tdf["quantity"].max()) if tdf is not None and len(tdf) > 0 else 100
     qty_range = st.slider("q", 0, max(max_q, 1), (0, max(max_q, 1)), label_visibility="collapsed")
 
     # Backtest
-    st.markdown('<div class="sl">backtest</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sl">algo</div>', unsafe_allow_html=True)
     algo_files = sorted(ALGOS_DIR.glob("*.py"))
     algo_choices = {"algo.py": BASE_DIR / "algo.py"}
     for f in algo_files:
         if f.name != "datamodel.py": algo_choices[f.name] = f
     sel_algo = st.selectbox("a", list(algo_choices.keys()), label_visibility="collapsed")
+    st.markdown('<div class="sl">round</div>', unsafe_allow_html=True)
     round_input = st.text_input("r", value="0", label_visibility="collapsed")
     bc1, bc2 = st.columns(2)
     run_bt = bc1.button("Run")
