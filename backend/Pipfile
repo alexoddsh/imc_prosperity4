@@ -12,6 +12,7 @@ psycopg2-binary = "*"
 sqlalchemy = "*"
 python-dotenv = "*"
 prosperity4btx = "*"
+supabase = "*"
 
 [requires]
 python_version = "3"

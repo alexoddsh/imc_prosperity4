@@ -1,6 +1,5 @@
 <template>
   <div class="app-wrapper">
-    <!-- Main Chart Area (5/6 Width) -->
     <main class="chart-area">
       <div class="main-chart">
         <PriceChart
@@ -19,7 +18,6 @@
       </div>
     </main>
 
-    <!-- Control Sidebar (1/6 Width) -->
     <aside class="control-sidebar">
       <div class="info-box">
         <b>{{ selectedProduct || '—' }}</b> | {{ timeRange }}<br>
@@ -140,7 +138,7 @@ const fetchProducts = async (id) => {
 const runBacktest = async () => {
   isRunning.value = true
   try {
-    const res = await $fetch('http://127.0.0.1:8000/run/', {
+    const res = await $fetch(`${config.public.apiBase}/run/`, {
       method: 'POST',
       body: { algo_file: algoName.value, round: roundId.value }
     })

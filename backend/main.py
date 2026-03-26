@@ -9,9 +9,8 @@ from pydantic import BaseModel
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from pathlib import Path
-from core.parser import process_results # Import your parser
+from core.parser import process_results 
 
-# Load credentials from your .env file
 env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
@@ -21,10 +20,12 @@ key: str = os.environ.get("SUPABASE_KEY")
 app = FastAPI()
 
 # --- CORS Setup ---
-# Allows your Nuxt frontend (port 3000) to talk to this API (port 8000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=[
+        "http://localhost:3000"
+        "https://your-project-name.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
