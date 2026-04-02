@@ -1,53 +1,65 @@
 import pandas as pd
 import io
 import re
+import json
 from pathlib import Path
 from database import fast_pg_insert, update_backtest_status
+from core import classification, normalizer, position
 
-def process_results(task_id: str, log_path: Path):
-    print(f"--- [PARSER]: Using Activities Log Extraction for {task_id} ---")
+
+def process_results(task_id: str, log_path: Path) -> int:
     try:
         text = log_path.read_text()
-        
-        # 1. Locate the "Activities log" section
+
         ai = text.find("Activities log:\n")
         ti = text.find("Trade History:\n")
-        
+
         if ai == -1 or ti == -1:
-            print("--- [ERROR]: Could not find Activities log section! ---")
+            print("--[ERROR]--: Could not find Activities log or Trade History ---")
             return
 
-        # 2. Extract the table string
-        # This is the CSV data between "Activities log" and "Trade History"
-        table_str = text[ai + len("Activities log:\n"):ti].strip()
+        #prices
+        prices_str = text[ai + len("Activities log:\n"):ti].strip()
+        prices = pd.read_csv(io.StringIO(prices_str), sep=";")
+        final_pnl = float(prices["profit_and_loss"].iloc[-1])
+
+        #trades
+        time_to_day = dict(zip(prices['timestamp'], prices['day']))
+        trade_str = text[ti + len("Trade History:\n"):].strip()
+        trade_str = re.sub(r',\s*([}\]])', r'\1', trade_str)
+        trades = pd.DataFrame(json.loads(trade_str))
+        trades['day'] = trades['timestamp'].map(time_to_day)
         
-        # 3. Load into Pandas (It uses ';' as a separator)
-        df_raw = pd.read_csv(io.StringIO(table_str), sep=";")
-        
-        if df_raw.empty:
-            print("--- [ERROR]: Activities log is empty! ---")
-            return
+        #pre insert computations (prices)
+        products = prices[prices["timestamp"] == 0]["product"].to_list()
+        if len(products) == 0:
+            raise ValueError("--[TRADES]--: No products where found in the TDF")
 
-        # 4. Format for our Database
-        df = pd.DataFrame()
-        df['backtest_id'] = [str(task_id)] * len(df_raw)
-        df['timestamp'] = df_raw['timestamp']
-        df['product'] = df_raw['product']
-        df['bid_price_1'] = pd.to_numeric(df_raw['bid_price_1'], errors='coerce')
-        df['ask_price_1'] = pd.to_numeric(df_raw['ask_price_1'], errors='coerce')
-        df['mid_price'] = pd.to_numeric(df_raw['mid_price'], errors='coerce')
-        df['profit_and_loss'] = pd.to_numeric(df_raw['profit_and_loss'], errors='coerce')
+        for product in products:
+            print(f"--[WALLMID]--: Wallmid Classes for {product}")
+            success1 = normalizer.compute_wallmid1(product, prices)
+            success2 = normalizer.compute_wallmid2(product, prices)
+            if not success1 or not success2:
+                raise Exception(f"--[WALLMID]--: Pre compute failed {product}")
 
-        # 5. Get the Final PnL for the status update (last row of first product)
-        first_product = df['product'].iloc[-1]
-        last_rows = df[df['product'] == first_product]
-        final_pnl = float(last_rows['profit_and_loss'].iloc[-1])
-
-        # 6. Insert
-        print(f"--- [SUCCESS]: Found {len(df)} rows in Activities Log ---")
-        fast_pg_insert(df, "indicators")
+        #prev insert computations (trades)
+        for product in products:
+            print(f"--[CLASSIFICATION]--: Calculating Classes for {product}")
+            success = classification.compute_classes(product, prices, trades)
+            if not success:
+                raise Exception(f"--[CLASSIFICATION]--: Pre compute failed {product}")
+            print(f"--[POSITION]--: Calculating position for {product}")
+            success = position.compute_position(product, trades)
+            if not success:
+                raise Exception(f"--[POSITION]--: Pre compute failed {product}")
+            
+        prices.insert(0, "backtest_id", str(task_id))
+        trades.insert(0, "backtest_id", str(task_id))
+        fast_pg_insert(trades, "trades")
+        fast_pg_insert(prices, "prices")
         update_backtest_status(str(task_id), "COMPLETED", final_pnl)
 
     except Exception as e:
-        print(f"!!! Parser Failed: {e}")
+        print(f"--[PARSER]--: Parser Failed: {e}")
         update_backtest_status(str(task_id), "FAILED")
+        return 0

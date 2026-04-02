@@ -1,5 +1,6 @@
-from datamodel import OrderDepth, UserId, TradingState, Order
+from datamodel import  TradingState, Order
 from typing import List
+
 import json
 
 class Logger:
@@ -8,7 +9,6 @@ class Logger:
 
     def print(self, *objects: any, sep: str = " ", end: str = "\n") -> None:
         self.logs += sep.join(map(str, objects)) + end
-
     def flush(self, state, orders, conversions, traderData):
         print(json.dumps({
             "sandboxLog": self.logs,

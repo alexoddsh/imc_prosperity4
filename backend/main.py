@@ -8,7 +8,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from pathlib import Path
 from core.parser import process_results 
 
 env_path = Path(__file__).parent / ".env"
@@ -19,40 +18,34 @@ key: str = os.environ.get("SUPABASE_KEY")
 
 app = FastAPI()
 
-# --- CORS Setup ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000"
-        "https://your-project-name.vercel.app"
+        "http://localhost:3000",
+        "https://imc-prosperity4.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- Supabase Setup ---
 url: str = os.environ.get("SUPABASE_URL")
 key: str = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(url, key)
 
-# --- Data Models ---
 class RunRequest(BaseModel):
     algo_file: str
     round: str
 
-# --- The Worker Engine ---
 def execute_backtest(task_id: str, algo_file: str, round_id: str):
     try:
-        # 1. Setup absolute paths
         base_path = os.path.dirname(os.path.abspath(__file__))
         algo_path = os.path.join(base_path, "algos", algo_file)
         log_dir = os.path.join(base_path, "logs")
         os.makedirs(log_dir, exist_ok=True)
         log_path = os.path.join(log_dir, f"{task_id}.log")
 
-        # 2. THE FIX: Point directly to the verified binary path
-        # This skips the "No module named" error entirely
+        #DO NOT CHANGE 
         algo_dir = os.path.dirname(algo_path) 
         binary_exec = "/Users/alexoddsh/.local/share/virtualenvs/backend-dqIMmv-9/bin/prosperity4btx"
         env = os.environ.copy()
@@ -63,11 +56,13 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str):
             algo_path, 
             round_id, 
             "--out", log_path,
-            "--print"
+            "--print",
         ]
 
         print(f"\n--- [STARTING SIMULATION: {task_id}] ---")
         print(f"  [EXEC]: {binary_exec}")
+
+        stream_log_path = os.path.join(log_dir, f"{task_id}_stream.log")
 
         process = subprocess.Popen(
             cmd,
@@ -75,35 +70,55 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str):
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            cwd=algo_dir, 
+            cwd=algo_dir,
             env=env
         )
 
-        for line in process.stdout:
-            print(f"  [PROSPERITY]: {line.strip()}")
+        with open(stream_log_path, 'w') as stream_f:
+            for line in process.stdout:
+                clean = line.strip()
+                print(f"  [PROSPERITY]: {clean}")
+                stream_f.write(clean + '\n')
+                stream_f.flush()
 
         process.wait()
 
+        def slog(msg):
+            print(msg)
+            with open(stream_log_path, 'a') as f:
+                f.write(msg + '\n')
+
         if process.returncode == 0:
-            print(f"--- [SUCCESS: {task_id}] ---")
-            
-            # This is what moves data from the .log file to the Dashboard/DB
-            try:    
-                print(f"  [PARSER]: Starting data extraction for {task_id}...")
-                process_results(task_id, Path(log_path))
-                print(f"  [PARSER]: Success. Dashboard should now be populated.")
-                
+            slog(f"--- [SUCCESS: {task_id}] ---")
+            try:
+                slog(f"  [PARSER]: Starting data extraction for {task_id}...")
+                if process_results(task_id, Path(log_path)) == 0:
+                    raise Exception("Parser returned 0")
+                else:
+                    slog("  [PARSER]: Success. Dash should now be populated")
             except Exception as e:
-                print(f"  [PARSER ERROR]: {str(e)}")
-                # If parsing fails, we still need to mark it so the UI stops spinning
+                slog(f"  [PARSER ERROR]: {str(e)}")
                 supabase.table("backtest_runs").update({"status": "FAILED"}).eq("id", task_id).execute()
         else:
-            print(f"--- [FAILED: Exit Code {process.returncode}] ---")
+            slog(f"--- [FAILED: Exit Code {process.returncode}] ---")
             supabase.table("backtest_runs").update({"status": "FAILED"}).eq("id", task_id).execute()
 
     except Exception as e:
-        print(f"--- [CRITICAL SYSTEM ERROR: {str(e)}] ---")
+        msg = f"--- [CRITICAL SYSTEM ERROR: {str(e)}] ---"
+        print(msg)
+        try:
+            with open(stream_log_path, 'a') as f:
+                f.write(msg + '\n')
+        except Exception:
+            pass
         supabase.table("backtest_runs").update({"status": "FAILED"}).eq("id", task_id).execute()
+
+@app.get("/logs/{task_id}")
+async def get_run_logs(task_id: str):
+    log_path = Path(os.path.dirname(os.path.abspath(__file__))) / "logs" / f"{task_id}_stream.log"
+    if not log_path.exists():
+        return {"lines": []}
+    return {"lines": log_path.read_text().splitlines()}
 
 @app.get("/")
 async def root():

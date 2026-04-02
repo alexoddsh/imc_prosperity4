@@ -1,37 +1,121 @@
 <template>
-  <div style="height: 100%; width: 100%;">
-    <client-only>
-      <apexchart type="area" height="100%" :options="chartOptions" :series="chartSeries" />
-    </client-only>
-  </div>
+  <div ref="el" style="height: 100%; width: 100%;" />
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
-const props = defineProps(['taskId', 'product'])
-const supabase = useSupabaseClient()
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 
-const chartSeries = ref([])
-const chartOptions = ref({
-  chart: { id: 'sync-pnl', group: 'backtest-sync', animations: { enabled: false }, toolbar: { show: false }, sparkline: { enabled: false } },
-  colors: ['#000000'],
-  stroke: { curve: 'straight', width: 1.5 },
-  fill: { type: 'solid', opacity: 0.06, colors: ['#00C800'] },
-  xaxis: { type: 'numeric', labels: { show: false }, axisTicks: { show: false }, tooltip: { enabled: false } },
-  yaxis: { labels: { style: { fontSize: '9px', fontFamily: 'IBM Plex Mono' } } },
-  grid: { borderColor: '#E8E8E8' },
-  dataLabels: { enabled: false }
-})
+const props = defineProps(['taskId', 'product', 'day'])
+const supabase = useSupabaseClient()
+const { subscribe, broadcast } = useChartSync()
+const { fetchAll } = useFetchAll()
+
+const el = ref(null)
+let lc    = null
+let chart = null
+let ser   = null
 
 const fetchData = async () => {
-  if (!props.taskId || !props.product) return
-  const { data } = await supabase.from('indicators')
-    .select('timestamp, profit_and_loss')
+  if (!lc || !chart || !props.taskId || !props.product || !props.day) return
+  
+  let query = supabase.from('prices')
+    .select('timestamp, profit_and_loss, day')
     .eq('backtest_id', props.taskId)
     .eq('product', props.product)
-    .order('timestamp', { ascending: true })
-    .limit(10000)
-  if (data) chartSeries.value = [{ name: 'PnL', data: data.map(d => [d.timestamp, d.profit_and_loss]) }]
+
+  if (props.day !== 'all' && props.day !== '') {
+    query = query.eq('day', props.day)
+  }
+
+  const rawData = await fetchAll(() => query.order('timestamp', { ascending: true }))
+  if (!rawData?.length) return
+
+  let chartPoints = []
+  
+  if (props.day === 'all') {
+    const minDay = Math.min(...rawData.map(d => d.day))
+    const firstDayPoints = rawData.filter(d => d.day === minDay)
+    const offset = firstDayPoints.length > 0 ? firstDayPoints[firstDayPoints.length - 1].profit_and_loss : 0
+
+    chartPoints = rawData.map(d => ({
+      time: d.timestamp,
+      value: d.day > minDay ? (d.profit_and_loss + offset) : d.profit_and_loss,
+      day: d.day 
+    }))
+  } else {
+    chartPoints = rawData.map(d => ({ 
+      time: d.timestamp, 
+      value: d.profit_and_loss ?? 0,
+      day: d.day 
+    }))
+  }
+
+  if (ser) { try { chart.removeSeries(ser) } catch {} }
+  
+  const lastVal = chartPoints[chartPoints.length - 1].value
+  const isProfit = lastVal >= 0
+  
+  const theme = isProfit 
+    ? { line: '#00c800', top: 'rgba(0, 200, 0, 0.2)', bottom: 'rgba(0, 200, 0, 0)' } 
+    : { line: '#ff4444', top: 'rgba(255, 68, 68, 0.2)', bottom: 'rgba(255, 68, 68, 0)' } 
+  
+  ser = chart.addSeries(lc.AreaSeries, {
+    lineColor: theme.line, 
+    lineWidth: 1.5,
+    topColor: theme.top,
+    bottomColor: theme.bottom,
+    lastValueVisible: false,
+    priceLineVisible: false,
+    crosshairMarkerVisible: false,
+  })
+
+  ser.setData(chartPoints)
+  chart.timeScale().fitContent()
+  
+  if (props.day === 'all' || props.day === '') {
+    const markers = []
+    for (let i = 1; i < data.length; i++) {
+      if (data[i].day !== data[i - 1].day) {
+        markers.push({
+          time: data[i].timestamp,
+          position: 'inBar',
+          color: '#cccccc',
+          shape: 'arrowDown',
+          text: `D${data[i].day}`,
+        })
+      }
+    }
+    ser.setMarkers(markers)
+  }
 }
-watch([() => props.taskId, () => props.product], fetchData)
+
+watch([() => props.taskId, () => props.product, () => props.day], fetchData)
+
+onMounted(async () => {
+  lc = await import('lightweight-charts')
+  chart = lc.createChart(el.value, {
+    autoSize: true,
+    layout: {
+      background: { type: lc.ColorType.Solid, color: '#ffffff' },
+      textColor: '#555',
+      fontFamily: 'IBM Plex Mono',
+      fontSize: 9,
+    },
+    grid: { vertLines: { color: '#f0f0f0' }, horzLines: { color: '#f0f0f0' } },
+    crosshair: { mode: lc.CrosshairMode.Normal },
+    rightPriceScale: { borderColor: '#ddd', scaleMargins: { top: 0.1, bottom: 0.05 } },
+    timeScale: { borderColor: '#ddd', uniformDistribution: true, minBarSpacing: 0, tickMarkFormatter: t => String(t) },
+    localization: { timeFormatter: t => `t=${t}` },
+    handleScroll: { mouseWheel: false, pressedMouseMove: true },
+    handleScale: { mouseWheel: false, axisPressedMouseMove: { time: true, price: true }, axisDoubleClickReset: true },
+  })
+
+  const syncFn = range => chart?.timeScale().setVisibleLogicalRange(range)
+  subscribe(syncFn)
+  chart.timeScale().subscribeVisibleLogicalRangeChange(range => broadcast(syncFn, range))
+
+  if (props.taskId && props.product && props.day) await fetchData()
+})
+
+onUnmounted(() => { chart?.remove(); chart = null; lc = null })
 </script>

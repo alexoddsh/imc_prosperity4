@@ -14,121 +14,19 @@ STRATEGY IDEAS
 - derivatives
 - macroeconomic impacts
 
-DASHBOARD IDEAS
-In OrderDepth we never see the takers as they never end up in the OB. We only see the makers. The trades data is used for
-the takers. Basic intuition:
-
-1. Triangle (Taker) at the Ask: Someone just "lifted the offer." They bought aggressively.
-2. Triangle (Taker) at the Bid: Someone just "hit the bid." They sold aggressively.
-3. Square (Maker) Trade: This usually shows up when a large Taker order eats through multiple levels of the book, hitting several "resting" Maker orders in a row.
-
-So many clustered squares means some taker (whale) is aggressively eating the liquidity and if there are many triangles
-then there is and aggressive demand increase. 
-
-We plot ask quotes in red, bid quotes in blue for clear distinction. We do NOT want data smoothing, instead we want 
-a plot option where the line only changes when the numerical value actually changes. We then plot our own potential trades as crosses.
-
-The dashboard also needs the following basic functionalities:
-1. Hoverable Tooltip. Displays who traded (us or IMC Bot), at what price, how much, and timestamp. Identifying the Role (Maker/Taker) and the Owner (You/Market) to help strategy.
-2. Below the main chart, a not so tall PnL panel that shows the P/L for the currently selected product. 
-3. Position panel. Displays the net position for the selected product over time. Should be same styling and dimension as PnL and sit under the PnL section.
-4. Log viewer. Skip for now. 
-5. Selection controls. Allows for selecting, the log file and the product. Also shows specific logged indicators to overlay onto prices. We also want a normalization dropdown, by selecting and indicator like "WallMid" all prices can be normalized relative to it. 
-6. Trade Filtering and visuals. Controls what types of traders and order book elements to display in chart.
- - Toggle order book levels
- - Toogle all trades, specific trader groups, or specific traders:
-    M = makers (Passibe bots. Exist simply to provide a baseline spread. Any trade where the price is exactly best bid/ask and has been sitting there for multiple timestamps)
-    S = small taker (Represent retail/institutional "noise". Based purely on quantity. Small = 1-5 units.)
-    B = big taker (Big = 20+ units)
-    I = informed taker (This is the key toxic bot. They take liquidity just before price changes.) We identify them if they (1. take liquidity, 2. right before significant price move, 3. consistently win)
-    F = our own trades
- - Set quantity filters to only show trades in a specified size range. 
- 
- Note that in the earlier rounds we do not know anything at all about the identies, to find an "informed" taker we need to look at the first 2 conditions primarily.
-
- Quick note on dashboard design and data. Please use easy to read fonts and colors. All backgrounds should be white or light grey and 
- no fancy design at ALL is needed. No rounded borders or other distracting elements. Also spacing should be tight, no 36px gaps 
- no unneccessary titles or not needed stuff. Do not add anything not requested. Colours should be distinct red, blue, green etc. Fonts should be IBM Plex Mono or other suitable monospace fonts.
-
- BACKTESTING DATA
- We will use the following Library: pip install -U prosperity4btx (https://github.com/Xeeshan85/imc-prosperity-4-backtester).
- Run the following to backtest:
-
- - prosperity4btx <path to algorithm file> 0
-
- Note here that the 0 refers to the specific round. As the user we should be able to in the main dashboard set the round.
- Then the dashboard should be able to call the backtesting engine itself if we click in a button in the dash. Note that when 
- a new round is set the first time we need to rerun pip install so that we actually get the new round config. 
-
- Furthermore all rounds testing data have 2 days:
- # Backtest on round 1 day 0
-    $ prosperity4btx example/starter.py 1-0
-
-# Backtest on round 1 day -1 and round 1 day 0
-    $ prosperity4btx example/starter.py 1--1 1-0
-
-# Backtest on all days from rounds 1 and 2
-    $ prosperity4btx example/starter.py 1 2
-
-# Merge profit and loss across days
-    $ prosperity4btx example/starter.py 1 --merge-pnl
-
-# Write algorithm output to custom file
-    $ prosperity4btx example/starter.py 1 --out example.log
-
-# Print trader's output to stdout while running This may be helpful when debugging a broken trader
-    $ prosperity4btx example/starter.py 1 --print
-
-With this lib the dashboard can seamlessy integrate the backtesting for us and show the new charts. We need to save every test and then be able to select that 
-test in the controls covered above so that we can compare different tests. To figure out the ouput structure from the backtester you can A) look at the docs/files: https://github.com/Xeeshan85/imc-prosperity-4-backtester
-and B) we can run a backtest and check. 
-
- STRATEGY 1: THE BASIC MARKET MAKING STRATEGY
- Each timestep, first take any favourable trades avaible against the mean. Then, place passive quotes (maker) slightly
- the current best bid and slightly below the current best ask. We should always be "inside" the market. IF inventory 
- becomes too skewed, flatten it.
-
- What if price moves/is unpredicatble? Main risk is inventory risk. But if price slowly drifts then the problem
- remains unchanged. We want to use our same indicator WallMid as the true price instead of trying to predict the market.
- If we are to predict future prices at all - only takers are useful. Makers generally do not signal any predictive 
- power over the future price. 
-
- The WallMid baseline price? To decide if a trade is "cheap" or "expensive" even in a randow drift profuct we need a
- baseline price of what the item is worth now. Since the liquidity in the Prosperity markets are thin looking at the
- actual prices is less relevant. The orderbook may be thin at the best levels, for example bid_volume_1 may only be 
- holding 5 units BUT ask_volume_1 50. Then simply doing the normal mid price calculation doesnt give a good indication 
- of the current consensus. 
-
- Therefore we use WallMid to flatten the price charts. We are simply only interested in the spread relative to Wallmid. 
- My best idea and what we will use for WallMid is a VWAP if the current orderDepth:
- 
- 1. Wallmid1 = Sum (Price_i * Volume_i) / Sum Volume_i (VWAP Approach)
- 2. Wallmid2 = Look at the largest volume at the Bid and the largest volume of ask so (Largest vol ask level price + Largest vol bid level price) / 2 (Absolute Value Approach)
-
- The idea is to ignore market noise, only trade when we see a price that deviates significantly from this liquidity wall.
- 
- HOW TO HEDGE
- When the bid ask spread is too low relative to the products average movement. This combined with larger vol
- means that the variance of the PnL increases. The jump problem is the adverse selection. Consider this:
-  1. We have OB at T = 0, we see the OB state and decide that FV is 100 and place an ask of 101. 
-  2. Before T progresses to T=100, bots can trade on our order. An Informed bot may trade on this 101 because he knows 
-  that at T=100 the price will spike. 
-
- Note: Orders are "fill or kill" on the prosperity exchange. If the order is not filled it is killed. How to hedge this?
-  1. WallMid - look at the walls of volume. If ask wall is moving up shift up sell orders (ask) before we are hit. 
-  2. Position Scaling - Balance the position around 0, if the position starts getting LONG for example, stop placing 
-  buys entirely or decrease bids so much that only a big price drop fills them. This hedges exposure. 
+BACKTESTING DATA
+We will use the following Library: pip install -U prosperity4btx (https://github.com/Xeeshan85/imc-prosperity-4-backtester).
+Run the following to backtest:
 
 
-STRATEGY 2: THE INFORMED AGENT STRAT
-Historically it has been the case that some products have an informed agent on them, effectively buying and selling at or around
-the daily min max at similar quantities. We need a check in the dashboard that always runs to check for such. We will use 3 main
-identification rules. 
+IMPORTAN EXCHANGE MECHANICS
+- orders are IOC (Immediate or Cancel) and not Fill or Kill. That means that if an order is placed
+  for 100 units bid at 100 and only 40 exist at that ask then the order is partially filled and the rest 
+  is cancelled. 
 
-    1. Quantity must be exactly 10 units or larger
-    2. price must equal or near equal day high/min 
-    3. correct direction, if low informed must be buying and vice versa
-    4. informed is likely classed as informed or taker 
+- Prosperity is a "Turn-Based" simulation disguised as a continuous market.
+    1. Start of Tick: Everyone (Bots and You) submits orders simultaneously.
+    2. Matching Phase: The engine matches all these orders against each other and the existing book.
+    3. Snapshot Phase: The engine looks at the result of all those matches and writes the "Activities" log (your pdf).
 
-In the scan of old data this is easy. Then when we check for the actual detection in the real trading day we need to immedieately
-close any positions if we have a false positve.  
+End of Tick: The round is over.
