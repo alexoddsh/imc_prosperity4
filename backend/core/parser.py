@@ -1,54 +1,87 @@
+from io import StringIO
 import pandas as pd
 import io
 import re
 import json
 from pathlib import Path
+from core.models import SystemEnum
 from database import fast_pg_insert, update_backtest_status
 from core import classification, normalizer, position, inter
 
-
-def process_results(task_id: str, log_path: Path, stream_log: Path) -> int:
+def process_results(task_id: str, log_path: Path, stream_log: Path | None, system: SystemEnum) -> int:
     try:
-        text = log_path.read_text()
-        text2 = stream_log.read_text()
+        if system == SystemEnum.PROSPERITY4TBX:
+            text = log_path.read_text()
+            text2 = stream_log.read_text()
+        
+            ai = text.find("Activities log:\n")
+            ti = text.find("Trade History:\n")
+            id_lines = text2.splitlines()
 
-        ai = text.find("Activities log:\n")
-        ti = text.find("Trade History:\n")
-        id_lines = text2.splitlines()
+            if ai == -1 or ti == -1:
+                raise ValueError("  [ERROR]: Could not find Activities log or Trade History ---")
 
-        if ai == -1 or ti == -1:
-            print("  [ERROR]: Could not find Activities log or Trade History ---")
-            return
+            #prices
+            prices_str = text[ai + len("Activities log:\n"):ti].strip()
+            prices = pd.read_csv(io.StringIO(prices_str), sep=";")
+            final_pnl = float(prices["profit_and_loss"].iloc[-1])
 
-        #prices
-        prices_str = text[ai + len("Activities log:\n"):ti].strip()
-        prices = pd.read_csv(io.StringIO(prices_str), sep=";")
-        final_pnl = float(prices["profit_and_loss"].iloc[-1])
+            #trades
+            time_to_day = dict(zip(prices['timestamp'], prices['day']))
+            trade_str = text[ti + len("Trade History:\n"):].strip()
+            trade_str = re.sub(r',\s*([}\]])', r'\1', trade_str)
+            trades = pd.DataFrame(json.loads(trade_str))
+            trades['day'] = trades['timestamp'].map(time_to_day)
 
-        #trades
-        time_to_day = dict(zip(prices['timestamp'], prices['day']))
-        trade_str = text[ti + len("Trade History:\n"):].strip()
-        trade_str = re.sub(r',\s*([}\]])', r'\1', trade_str)
-        trades = pd.DataFrame(json.loads(trade_str))
-        trades['day'] = trades['timestamp'].map(time_to_day)
+            #internal data
+            ied={}
+            day = -3
+            i = 0
+            for line in id_lines:
+                if line.startswith("B"): #backtesting log
+                    day += 1
+                elif line.strip().startswith("{"):
+                    ied[(i, str(day))] = line.strip()
+                    i += 1
+            
+            internal = pd.DataFrame(columns=["timestamp", "product", "order_price", "order_quantity"])
+            print("  [INTERNAL]: Internal parsing underway")
+            success = inter.parse_internal(ied, internal)
+            if not success:
+                raise Exception("  [INTERNAL]: Internal data parsing failed")
+        
+        elif system == SystemEnum.PROSPERITY:
+            data = json.loads(log_path.read_text())
+            ai = data["activitiesLog"]
+            th = data["tradeHistory"]
+            ied = data["logs"]
 
-        #internal data
-        id={}
-        day = -3
-        i = 0
-        for line in id_lines:
-            if line.startswith("B"): #backtesting log
-                day += 1
-            elif line.strip().startswith("{"):
-                id[(i, str(day))] = line.strip()
+            if not ai or not th or not ied:
+                raise ValueError("  [ERROR]: Could not find Activities log or Trade History ---")
+            
+            #standard prosperity data is clear to just read as JSON
+            prices = pd.read_csv(StringIO(ai), sep=";")
+            final_pnl = float(prices["profit_and_loss"].iloc[-1])
+            trades = pd.DataFrame(th)
+            
+            raw_logs = {}
+            day = 0
+            i = 0 #just acts like a fake index kinda
+
+            for entry in ied:
+                raw_logs[(i, day)] = entry["sandboxLog"]
                 i += 1
-        
-        internal = pd.DataFrame(columns=["timestamp", "product", "order_price", "order_quantity"])
-        print("  [INTERNAL]: Internal parsing underway")
-        success = inter.parse_internal(id, internal)
-        if not success:
-            raise Exception("  [INTERNAL]: Internal data parsing failed")
-        
+            
+            internal = pd.DataFrame(columns=["timestamp", "product", "order_price", "order_quantity"])
+            print("  [INTERNAL]: Internal parsing underway")
+            print(raw_logs)
+            success = inter.parse_internal(raw_logs, internal)
+            if not success:
+                raise Exception("  [INTERNAL]: Internal data parsing failed")
+
+        #now regardless both dfs look the same regardless of if we are using the backtester or the prosperity 
+        #log file
+
         #pre insert computations (prices)
         products = prices[prices["timestamp"] == 0]["product"].to_list()
         if len(products) == 0:
@@ -80,6 +113,7 @@ def process_results(task_id: str, log_path: Path, stream_log: Path) -> int:
         fast_pg_insert(prices, "prices")
         fast_pg_insert(internal, "internal")
         update_backtest_status(str(task_id), "COMPLETED", final_pnl)
+        return 1
 
     except Exception as e:
         print(f"  [PARSER]: Parser Failed: {e}")

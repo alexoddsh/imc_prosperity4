@@ -13,6 +13,8 @@ sqlalchemy = "*"
 python-dotenv = "*"
 prosperity4btx = "*"
 supabase = "*"
+multipart = "*"
+python-multipart = "*"
 
 [requires]
 python_version = "3"

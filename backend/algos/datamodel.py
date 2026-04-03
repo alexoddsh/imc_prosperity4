@@ -109,17 +109,3 @@ class ProsperityEncoder(JSONEncoder):
             return o.__dict__
 
 
-##OBS our own class for internal logging system
-class Logger:
-    def __init__(self) -> None:
-        self.logs = ""
-
-    def print(self, *objects: any, sep: str = " ", end: str = "\n") -> None:
-        self.logs += sep.join(map(str, objects)) + end
-    def flush(self, state, orders, conversions, traderData):
-        print(json.dumps({
-            "sandboxLog": self.logs,
-            "lambdaLog": traderData,
-            "timestamp": state.timestamp,
-        }, separators=(",", ":")))
-        self.logs = ""

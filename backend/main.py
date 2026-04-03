@@ -1,13 +1,14 @@
+import uuid
 import os
 import logging
 import json
-import uuid
 import subprocess
+import shutil
 from pathlib import Path
 from datetime import datetime, timezone
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from core.models import LogFilter, SystemEnum, RunRequest
+from fastapi import FastAPI, BackgroundTasks, HTTPException, UploadFile, Form, File
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from core.parser import process_results 
@@ -17,6 +18,10 @@ load_dotenv(dotenv_path=env_path)
 
 url: str = os.environ.get("SUPABASE_URL")
 key: str = os.environ.get("SUPABASE_KEY")
+supabase: Client = create_client(url, key)
+
+uvicorn_access_logger = logging.getLogger("uvicorn.access")
+uvicorn_access_logger.addFilter(LogFilter()) ## tell uvicorn to not stream INFO to stdcout
 
 app = FastAPI()
 
@@ -30,22 +35,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-uvicorn_access_logger = logging.getLogger("uvicorn.access")
-
-class LogFilter(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        return "/logs/" not in record.getMessage()
-
-uvicorn_access_logger.addFilter(LogFilter()) ## tell uvicorn to not stream INFO to stdcout
-
-url: str = os.environ.get("SUPABASE_URL")
-key: str = os.environ.get("SUPABASE_KEY")
-supabase: Client = create_client(url, key)
-
-class RunRequest(BaseModel):
-    algo_file: str
-    round: str
-
 def execute_backtest(task_id: str, algo_file: str, round_id: str):
     try:
         base_path = os.path.dirname(os.path.abspath(__file__))
@@ -54,7 +43,6 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str):
         os.makedirs(log_dir, exist_ok=True)
         log_path = os.path.join(log_dir, f"{task_id}.log")
 
-        #DO NOT CHANGE 
         algo_dir = os.path.dirname(algo_path) 
         binary_exec = os.environ.get("PROSPERITY4BTX_PATH")
         env = os.environ.copy()
@@ -116,7 +104,7 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str):
         if process.returncode == 0:
             try:
                 slog(f"  [PARSER]: Starting data extraction for {task_id}...")
-                if process_results(task_id, Path(log_path), Path(stream_log_path)) == 0:
+                if process_results(task_id, Path(log_path), Path(stream_log_path), SystemEnum.PROSPERITY4TBX) == 0:
                     raise Exception("Parser returned 0")
                 else:
                     slog("  [PARSER]: Success. Dash should now be populated")
@@ -136,13 +124,6 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str):
         except Exception:
             pass
         supabase.table("backtest_runs").update({"status": "FAILED"}).eq("id", task_id).execute()
-
-@app.get("/logs/{task_id}")
-async def get_run_logs(task_id: str):
-    log_path = Path(os.path.dirname(os.path.abspath(__file__))) / "logs" / f"{task_id}_stream.log"
-    if not log_path.exists():
-        return {"lines": []}
-    return {"lines": log_path.read_text().splitlines()}
 
 @app.get("/")
 async def root():
@@ -166,3 +147,45 @@ async def run_backtest(req: RunRequest, background_tasks: BackgroundTasks):
     background_tasks.add_task(execute_backtest, task_id, req.algo_file, req.round)
 
     return {"task_id": task_id, "status": "Started"}
+
+@app.post("/upload-json")
+async def proccess_json(file: UploadFile = File(...), algo_file: str = Form(...), round: str = Form(...)):
+    print("  [UPLOAD]: Saving log file")
+    if not file.filename.endswith((".log")):
+        raise HTTPException(status_code=400, detail="Invalid file type")
+    
+    task_id = str(uuid.uuid4())
+    file_path = Path("logs") / f"{task_id}_{file.filename}"
+    
+    try:
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        supabase.table("backtest_runs").insert({
+            "id": task_id,
+            "algo_name": algo_file,
+            "round_id": round,
+            "status": "PENDING",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }).execute()
+        
+        
+        print("  [UPLOAD]: Attempting to parse log file")        
+        if process_results(task_id, file_path, None, SystemEnum.PROSPERITY) == 0:
+            raise Exception("Parser returned 0")
+        
+        print("  [PARSER]: Success. Dash should now be populated")
+
+        return {
+            "task_id": task_id,
+            "filename": file.filename,
+            "status": "stored successfully",
+            "path": str(file_path)
+        }
+
+    except Exception as e:
+        supabase.table("backtest_runs").update({"status": "FAILED"}).eq("id", task_id).execute()
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    finally:
+        await file.close()
