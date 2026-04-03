@@ -25,7 +25,7 @@ def compute_wallmid1(product: str, pdf: pd.DataFrame) -> bool:
                 else:
                     raise ValueError(f"  [WALLMID1]: Wallmid could not be computed for{product}")
         
-            pdf.at[i, "wallmid1"] = (vwaps["vwap_ask"] + vwaps["vwap_bid"]) / 2
+            pdf.at[i, "wallmid1"] = int((vwaps["vwap_ask"] + vwaps["vwap_bid"]) / 2)
             
         return True
         

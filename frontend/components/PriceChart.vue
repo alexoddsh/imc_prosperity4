@@ -9,16 +9,17 @@ import { ref, watch, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps(['taskId', 'product', 'day', 'indicators', 'normalize', 'activeCategories', 'qtyRange', 'obLevels'])
 const supabase = useSupabaseClient()
-const { subscribe, broadcast } = useChartSync()
+const { subscribe, broadcast, broadcastHover } = useChartSync()
 const { fetchAll } = useFetchAll()
 
 const el         = ref(null)
 const tooltipEl  = ref(null)
-let lc        = null
-let chart     = null
-let series    = {}
-let primitive = null
-let rawTrades = []
+let lc           = null
+let chart        = null
+let series       = {}
+let primitive    = null
+let dayLinePrim  = null
+let rawTrades    = []
 
 const SHORT = { MAKER1: 'M1', TAKER1: 'T1', INFORMED1: 'I1', TOXIC: 'TX', ALGO: 'AL' }
 const FG    = { MAKER1: '#fff', TAKER1: '#000', INFORMED1: '#fff', TOXIC: '#fff', ALGO: '#000' }
@@ -51,7 +52,7 @@ function hideTooltip() {
 const CAT_CFG = {
   MAKER1:    { color: '#FF8C00', stroke: '#000', r: 11 },
   TAKER1:    { color: '#00CC00', stroke: '#000', r: 8  },
-  INFORMED1: { color: '#FF2020', stroke: '#000', r: 8  },
+  INFORMED1: { color: '#6A3FE5', stroke: '#000', r: 8  },
   TOXIC:     { color: '#CC00CC', stroke: '#000', r: 8  },
   ALGO:      { color: '#FFD700', stroke: '#BB9000', r: 9 },
 }
@@ -197,22 +198,56 @@ function makePrimitive() {
   }
 }
 
+function makeDayLinePrimitive() {
+  let _chart = null
+  const _view = {
+    renderer() {
+      return {
+        draw(target) {
+          if (!_chart) return
+          target.useBitmapCoordinateSpace(({ context: ctx, horizontalPixelRatio: hr, bitmapSize }) => {
+            const x = _chart.timeScale().timeToCoordinate(1000000)
+            if (x == null) return
+            ctx.save()
+            ctx.strokeStyle = '#aaaaaa'
+            ctx.lineWidth = 1.5 * hr
+            ctx.setLineDash([5 * hr, 4 * hr])
+            ctx.beginPath()
+            ctx.moveTo(Math.round(x * hr) + 0.5, 0)
+            ctx.lineTo(Math.round(x * hr) + 0.5, bitmapSize.height)
+            ctx.stroke()
+            ctx.restore()
+          })
+        }
+      }
+    },
+    zOrder() { return 'normal' }
+  }
+  return {
+    attached({ chart }) { _chart = chart },
+    detached() { _chart = null },
+    paneViews() { return [_view] },
+  }
+}
+
 const valid = v => v != null && v !== 0
 
 const clearSeries = () => {
   if (primitive && series.Ask) {
     try { series.Ask.detachPrimitive(primitive) } catch (e) {}
   }
+  if (dayLinePrim && series.Ask) {
+    try { series.Ask.detachPrimitive(dayLinePrim) } catch (e) {}
+  }
 
   Object.keys(series).forEach(key => {
-    try { 
-      chart.removeSeries(series[key]) 
-    } catch (e) {}
+    try { chart.removeSeries(series[key]) } catch (e) {}
   })
 
-  series    = {}
-  primitive = null
-  rawTrades = []
+  series      = {}
+  primitive   = null
+  dayLinePrim = null
+  rawTrades   = []
 }
 
 const pushMarkers = () => {
@@ -315,7 +350,11 @@ const fetchData = async () => {
   }
 
   primitive = makePrimitive()
-  if (series.Ask) series.Ask.attachPrimitive(primitive)
+  if (series.Ask) {
+    series.Ask.attachPrimitive(primitive)
+    dayLinePrim = makeDayLinePrimitive()
+    series.Ask.attachPrimitive(dayLinePrim)
+  }
 
   if (tradeData) {
     tradeData.forEach(t => {
@@ -332,6 +371,7 @@ const fetchData = async () => {
     pushMarkers()
   }
   chart.timeScale().fitContent()
+
 }
 
 watch([() => props.taskId, () => props.product, () => props.day, () => props.indicators, () => props.normalize, () => props.obLevels], fetchData, { deep: true })
@@ -360,7 +400,7 @@ onMounted(async () => {
     localization: { timeFormatter: t => `t=${t}` },
     handleScroll: { mouseWheel: false, pressedMouseMove: true },
     handleScale: {
-      mouseWheel: false,
+      mouseWheel: true,
       axisPressedMouseMove: { time: true, price: true },
       axisDoubleClickReset: true,
     },
@@ -412,6 +452,7 @@ onMounted(async () => {
   const syncFn = range => chart?.timeScale().setVisibleLogicalRange(range)
   subscribe(syncFn)
   chart.timeScale().subscribeVisibleLogicalRangeChange(range => broadcast(syncFn, range))
+  chart.subscribeCrosshairMove(param => broadcastHover(null, param.time ?? null))
 
   if (props.taskId && props.product) await fetchData()
 })

@@ -6,14 +6,16 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps(['taskId', 'product', 'day'])
+const emit = defineEmits(['hover'])
 const supabase = useSupabaseClient()
-const { subscribe, broadcast } = useChartSync()
+const { subscribe, broadcast, subscribeHover, broadcastHover } = useChartSync()
 const { fetchAll } = useFetchAll()
 
 const el = ref(null)
-let lc    = null
-let chart = null
-let ser   = null
+let lc          = null
+let chart       = null
+let ser         = null
+let storedData  = []
 
 const fetchData = async () => {
   if (!lc || !chart || !props.taskId || !props.product || !props.day) return
@@ -69,24 +71,10 @@ const fetchData = async () => {
     crosshairMarkerVisible: false,
   })
 
+  storedData = chartPoints
   ser.setData(chartPoints)
   chart.timeScale().fitContent()
   
-  if (props.day === 'all' || props.day === '') {
-    const markers = []
-    for (let i = 1; i < data.length; i++) {
-      if (data[i].day !== data[i - 1].day) {
-        markers.push({
-          time: data[i].timestamp,
-          position: 'inBar',
-          color: '#cccccc',
-          shape: 'arrowDown',
-          text: `D${data[i].day}`,
-        })
-      }
-    }
-    ser.setMarkers(markers)
-  }
 }
 
 watch([() => props.taskId, () => props.product, () => props.day], fetchData)
@@ -107,12 +95,23 @@ onMounted(async () => {
     timeScale: { borderColor: '#ddd', uniformDistribution: true, minBarSpacing: 0, tickMarkFormatter: t => String(t) },
     localization: { timeFormatter: t => `t=${t}` },
     handleScroll: { mouseWheel: false, pressedMouseMove: true },
-    handleScale: { mouseWheel: false, axisPressedMouseMove: { time: true, price: true }, axisDoubleClickReset: true },
+    handleScale: { mouseWheel: true, axisPressedMouseMove: { time: true, price: true }, axisDoubleClickReset: true },
   })
 
   const syncFn = range => chart?.timeScale().setVisibleLogicalRange(range)
   subscribe(syncFn)
   chart.timeScale().subscribeVisibleLogicalRangeChange(range => broadcast(syncFn, range))
+
+  const lookup = time => {
+    if (time == null) { emit('hover', null); return }
+    const pt = storedData.find(p => p.time === time)
+    emit('hover', pt?.value ?? null)
+  }
+  subscribeHover(lookup)
+  chart.subscribeCrosshairMove(param => {
+    lookup(param.time ?? null)
+    broadcastHover(lookup, param.time ?? null)
+  })
 
   if (props.taskId && props.product && props.day) await fetchData()
 })

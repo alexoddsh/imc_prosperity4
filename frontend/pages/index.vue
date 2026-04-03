@@ -14,17 +14,19 @@
         />
       </div>
       <div class="sub-chart">
-        <PnLChart 
-        :taskId="activeTaskId" 
+        <PnLChart
+        :taskId="activeTaskId"
         :product="selectedProduct"
         :day="selectedDay"
+        @hover="v => hoverPnl = v"
         />
       </div>
       <div class="sub-chart">
-        <PositionChart 
-        :taskId="activeTaskId" 
-        :product="selectedProduct" 
+        <PositionChart
+        :taskId="activeTaskId"
+        :product="selectedProduct"
         :day="selectedDay"
+        @hover="v => hoverPos = v"
         />
       </div>
     </main>
@@ -33,7 +35,7 @@
       <div class="info-box">
         <b>{{ selectedProduct || '—' }}</b> | {{ timeRange }}<br>
         trades: {{ stats.trades }} (own: {{ stats.own }})<br>
-        PnL: <b>{{ stats.pnl.toFixed(0) }}</b>
+        PnL: <b>{{ stats.pnl.toFixed(0) }}</b><br>Cum. PnL: <b>{{ hoverPnl !== null ? hoverPnl.toFixed(0) : '—' }}</b> Pos: <b>{{ hoverPos !== null ? hoverPos.toFixed(0) : '—' }}</b>
       </div>
 
       <div>
@@ -66,10 +68,15 @@
 
       <div>
         <span class="sl">indicators</span>
-        <div class="checkbox-list">
-          <label v-for="opt in ['Mid', 'WallMid1', 'WallMid2']" :key="opt">
-            <input type="checkbox" :value="opt" v-model="selectedInd"> {{ opt }}
-          </label>
+        <div class="ind-dropdown">
+          <div class="raw-select ind-trigger" @click="indOpen = !indOpen">
+            {{ selectedInd.length ? selectedInd.join(', ') : '—' }}
+          </div>
+          <div v-if="indOpen" class="ind-options">
+            <label v-for="opt in ['Mid', 'WallMid1', 'WallMid2']" :key="opt">
+              <input type="checkbox" :value="opt" v-model="selectedInd"> {{ opt }}
+            </label>
+          </div>
         </div>
       </div>
 
@@ -114,20 +121,8 @@
         </div>
       </div>
 
-      <div class="error-box" style="margin-top: auto;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
-          <span class="sl" style="margin-bottom:0;">errors</span>
-          <span v-if="errors.length" class="sl" style="margin-bottom:0; cursor:pointer;" @click="errors=[]">clear</span>
-        </div>
-        <div class="error-list">
-          <div v-if="!errors.length" style="color:#bbb; font-size:10px;">—</div>
-          <div v-for="(e, i) in errors" :key="i" class="error-entry">
-            <span style="color:#999;">{{ e.t }}</span> {{ e.msg }}
-          </div>
-        </div>
-      </div>
 
-      <div style="margin-top: 0;">
+      <div style="margin-top: auto;">
         <span class="sl">algo</span>
         <input v-model="algoName" class="raw-input" style="margin-bottom: 8px;" />
         <span class="sl">round</span>
@@ -156,22 +151,19 @@ const selectedProduct = ref('')
 const selectedDay = ref('')
 const timeRange = ref('-')
 const selectedInd = ref([])
+const indOpen = ref(false)
 const normBy = ref('None')
 const obLevels = ref([1])
 
 const stats    = ref({ trades: 0, own: 0, pnl: 0 })
+const hoverPnl = ref(null)
+const hoverPos = ref(null)
 const qtyRange = ref([1, 100])
-const errors = ref([])
-
-const pushError = (msg) => {
-  errors.value.push({ msg, t: new Date().toLocaleTimeString() })
-  if (errors.value.length > 50) errors.value.shift()
-}
 
 const categories = ref([
   { name: 'MAKER1',    bg: '#FF8C00', fg: '#fff', active: true },
   { name: 'TAKER1',    bg: '#00FF00', fg: '#000', active: true },
-  { name: 'INFORMED1', bg: '#FF0000', fg: '#fff', active: true },
+  { name: 'INFORMED1', bg: '#6A3FE5', fg: '#fff', active: true },
   { name: 'TOXIC',     bg: '#ff03f7', fg: '#fff', active: true },
   { name: 'ALGO',      bg: '#FFD700', fg: '#000', active: true },
 ])
@@ -210,26 +202,13 @@ const runBacktest = async () => {
     activeTaskId.value = res.task_id
     pollStatus(res.task_id)
   } catch (e) {
-    pushError(`run: ${e?.message ?? e}`)
     isRunning.value = false
   }
 }
 
 const pollStatus = (id) => {
-  let linesShown = 0
-  errors.value = []
-
   const timer = setInterval(async () => {
-    const [{ data }, logsRes] = await Promise.all([
-      supabase.from('backtest_runs').select('status').eq('id', id).single(),
-      $fetch(`${config.public.apiBase}/logs/${id}`).catch(() => null),
-    ])
-
-    if (logsRes?.lines) {
-      const newLines = logsRes.lines.slice(linesShown)
-      newLines.forEach(line => pushError(line))
-      linesShown = logsRes.lines.length
-    }
+    const { data } = await supabase.from('backtest_runs').select('status').eq('id', id).single()
 
     if (data && (data.status === 'COMPLETED' || data.status === 'FAILED')) {
       clearInterval(timer)
@@ -288,7 +267,7 @@ const fetchSummaryStats = async (id) => {
     
     stats.value.trades = trdCount || 0
     stats.value.own    = ownCount || 0
-  } catch (e) { pushError(`stats: ${e?.message ?? e}`) }
+  } catch (e) {}
 }
 
 const formatRunLabel = (run) => {
@@ -335,6 +314,7 @@ watch(selectedDay, () => {fetchSummaryStats(activeTaskId.value)})
 
 .app-wrapper {
   margin-left: 5px;
+  width: calc(100vw - 5px);
 }
 
 .mono-select {
@@ -347,5 +327,27 @@ watch(selectedDay, () => {fetchSummaryStats(activeTaskId.value)})
   background: #fff;
   border: 1px solid #ccc;
   padding: 2px 4px;
+}
+.ind-dropdown {
+  position: relative;
+}
+.ind-trigger {
+  cursor: pointer;
+  user-select: none;
+}
+.ind-options {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-top: none;
+  z-index: 20;
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
 }
 </style>
