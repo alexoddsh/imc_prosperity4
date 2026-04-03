@@ -24,4 +24,4 @@ yarn-error.log*
 Thumbs.db
 .idea/
 .vscode/
-*.swp
+*.swp.vercel
