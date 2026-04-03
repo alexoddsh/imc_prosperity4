@@ -4,8 +4,9 @@ __pycache__/
 *$py.class
 .venv/
 Pipfile.lock
-.env
 backtests/*.log
+backend/logs/
+research/*
 
 # --- Nuxt / Node ---
 node_modules/

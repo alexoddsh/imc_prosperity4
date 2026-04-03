@@ -47,7 +47,7 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str):
 
         #DO NOT CHANGE 
         algo_dir = os.path.dirname(algo_path) 
-        binary_exec = "/Users/alexoddsh/.local/share/virtualenvs/backend-dqIMmv-9/bin/prosperity4btx"
+        binary_exec = os.environ.get("PROSPERITY4BTX_PATH")
         env = os.environ.copy()
         env["PYTHONPATH"] = f"{algo_dir}:{env.get('PYTHONPATH', '')}"
 
@@ -56,7 +56,6 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str):
             algo_path, 
             round_id, 
             "--out", log_path,
-            "--print",
         ]
 
         print(f"\n--- [STARTING SIMULATION: {task_id}] ---")

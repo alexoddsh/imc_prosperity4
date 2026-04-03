@@ -30,3 +30,18 @@ IMPORTAN EXCHANGE MECHANICS
     3. Snapshot Phase: The engine looks at the result of all those matches and writes the "Activities" log (your pdf).
 
 End of Tick: The round is over.
+
+OBSERVATIONS & CONVERSIONS 
+- Observations are extra intel we get about products, aka external data
+- Conversions allows us to at the end of a round send how many of our current products we want to 
+  "convert" aka sell or buy with another island. This is essentially arb markets BUT they come 
+  with costs suchs as exportFees etc. So basically:
+    1. Round takes place
+    2. We get observations and decide if a conversion is possible
+    3. If profitable we convert our position with another island, the important part
+    is that this allows us to capture arbitrage and make trades even if the orderbook
+    in our home market lacks liquidity
+
+ONLY ONE product in the simulation at a time is allowed for conversions. Aka we only need to return an INT:
+- conversions = 10 (we buy 10 units from another island)
+- conversions = -10 (we sell 10 units to another island)

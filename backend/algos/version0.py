@@ -1,21 +1,5 @@
-from datamodel import  TradingState, Order
+from datamodel import TradingState, Order, Logger
 from typing import List
-
-import json
-
-class Logger:
-    def __init__(self) -> None:
-        self.logs = ""
-
-    def print(self, *objects: any, sep: str = " ", end: str = "\n") -> None:
-        self.logs += sep.join(map(str, objects)) + end
-    def flush(self, state, orders, conversions, traderData):
-        print(json.dumps({
-            "sandboxLog": self.logs,
-            "lambdaLog": traderData,
-            "timestamp": state.timestamp,
-        }, separators=(",", ":")))
-        self.logs = ""
 
 class Trader:
     def run(self, state: TradingState):
