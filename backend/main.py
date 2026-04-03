@@ -94,7 +94,7 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str):
                         sandbox_log = data.get("sandboxLog", "")
                         if sandbox_log:
                             for log_line in sandbox_log.splitlines():
-                                if log_line.strip():
+                                if log_line.strip() and not log_line.strip().startswith("[DATA]"):
                                     print(f"  [ALGO]: {log_line.strip()}")
                     except json.JSONDecodeError:
                         pass 

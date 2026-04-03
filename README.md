@@ -37,8 +37,9 @@ when we can both easily run it locally for ourselves. The only main thing to thi
 
 | Channel | Destination | Purpose | Format | Best Practice |
 | :--- | :--- | :--- | :--- | :--- |
-| **`self.logger.print()`** | `stream.log` | **Humans.** Real-time debugging and terminal milestones. | Plain Text / String | Use sparingly (e.g., every 1000 ticks) to avoid terminal "spam." |
-| **`traderData`** | Internal State / `lambdaLog` | **The Machine.** Persistent memory to pass variables to the next round. | JSON (via `jsonpickle`) | Keep it lean (under 50k chars). Only store what the bot needs to "remember." |
+| **`self.logger.print()`** | `stream.log` + terminal | **Humans.** Real-time debugging and terminal milestones. | Plain Text / String | Use sparingly (e.g., every 1000 ticks) to avoid terminal spam. |
+| **`self.logger.print("[DATA] ...")`** | `stream.log` only (silent) | **Post-run parsing.** Store structured data (orders, signals) per timestamp for offline analysis. | `[DATA] ` prefix + JSON string | **Use this for high-frequency data** (every tick). The `[DATA]` prefix is filtered from terminal output by `main.py` but is written to the stream log. Parse it afterwards by scanning the log for `sandboxLog` entries that start with `[DATA]`. This is competition-safe — there is no character limit on `self.logger.print`, unlike `traderData`. |
+| **`traderData`** | Internal State / `lambdaLog` | **The Machine.** Persistent memory to pass variables to the next round. | JSON | **50k char limit in competition.** Only store what the bot needs to remember between ticks. Do NOT use this for logging. |
 
 When writing your `run` method, follow this sequence to ensure the backtester captures everything correctly:
 
@@ -55,18 +56,20 @@ When writing your `run` method, follow this sequence to ensure the backtester ca
    `self.logger.flush(state, result, conversions, traderData)`
    `return result, conversions, traderData`
 
-So for a short example, if we want to print something to see in self.logger (aka the terminal stream):
+Examples:
 
 ```python
 def run(self, state: TradingState):
-    # Log only every 1000th timestamp to keep the terminal clean
+    # TERMINAL OUTPUT — shows in terminal during run, use sparingly
     if state.timestamp % 1000 == 0:
         self.logger.print(f"Timestamp {state.timestamp}: Position is {state.position.get('EMERALDS', 0)}")
-    
-    # Log specific events (e.g., when a signal triggers)
-    if signal_triggered:
-        self.logger.print(">>> SIGNAL DETECTED: Executing Market Buy")
+
+    # SILENT DATA LOG — written to stream.log but NOT printed to terminal
+    # Use this for every-tick structured data you want to parse afterwards
+    self.logger.print(f"[DATA] {json.dumps({'ts': state.timestamp, 'orders': [[o.price, o.quantity] for o in my_orders]})}")
 ```
+
+To parse `[DATA]` entries after a run, scan the `_stream.log` file for JSON lines, extract `sandboxLog`, and filter for lines starting with `[DATA]`.
 
 See the datamodels file in algos for the full Logger class!
 
