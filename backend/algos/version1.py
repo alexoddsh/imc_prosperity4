@@ -36,32 +36,37 @@ class Trader:
                 best_bid_price, best_bid_vol = next(iter(state.order_depths["EMERALDS"].buy_orders.items()))
                 best_ask_price, best_ask_vol = next(iter(state.order_depths["EMERALDS"].sell_orders.items()))
                 
-                current_pos = state.position.get("EMERALDS", 0)
-                net_position_margin = POSITION_LIMITS["EMERALDS"] - current_pos
-
+                speculative_position = state.position.get("EMERALDS", 0) ##gets the actual current pos
+                
                 #1. take any profitable existing trades
                 if best_ask_price < 10000:
-                    algo_buy_order_t1 = Order(product, best_ask_price, best_ask_vol)
-                    orders_emeralds.append(algo_buy_order_t1)
-                    net_position_margin -= best_ask_vol
+                    speculative_position += best_ask_vol
+                    
                 if best_bid_price > 10000:
+                    speculative_position -= best_bid_vol
+                
+                net_position_margin = POSITION_LIMITS["EMERALDS"] - abs(speculative_position)
+                if net_position_margin >= 0: 
+                    algo_buy_order_t1 = Order(product, best_ask_price, best_ask_vol)
                     algo_sell_order_t1 = Order(product, best_bid_price, best_bid_vol)
+                    orders_emeralds.append(algo_buy_order_t1)
                     orders_emeralds.append(algo_sell_order_t1)
-                    net_position_margin += best_bid_vol
 
                 #2. make market just inside spread
+                skew_rate = (speculative_position/POSITION_LIMITS["EMERALDS"]) #imagine long 40/80 = 0.5 means we need to rebalance
+                
                 algo_bid_price = best_bid_price + 1 #just inside the spread :)
-                algo_bid_vol = int((net_position_margin - 1) / 2) #ensures rounding never goes in the wrong dir
+                algo_bid_vol = int((net_position_margin * (1-skew_rate) / 2))
 
                 algo_ask_price = best_ask_price - 1  
-                algo_ask_vol = -int((net_position_margin - 1) / 2)
+                algo_ask_vol = -int((net_position_margin * (1+skew_rate) / 2))
 
-                algo_buy_order_m1 = Order(product, algo_bid_price, algo_bid_vol)
-                if algo_buy_order_m1:
+                if algo_bid_vol > 0:
+                    algo_buy_order_m1 = Order(product, algo_bid_price, algo_bid_vol)
                     orders_emeralds.append(algo_buy_order_m1) 
-
-                algo_sell_order_m1 = Order(product, algo_ask_price, algo_ask_vol)
-                if algo_sell_order_m1:
+                    
+                if algo_ask_vol < 0:
+                    algo_sell_order_m1 = Order(product, algo_ask_price, algo_ask_vol)
                     orders_emeralds.append(algo_sell_order_m1)
 
                 result[product] = orders_emeralds
@@ -70,19 +75,17 @@ class Trader:
                 orders_tomatoes = []
                 continue
         
-        #critical here, we do not want to store the complex heavy class objects 
-        #that results consists of. ALSO we do not need to save the symbol in the keys and order objs
-        #but lets be lazy fow now 
-        if len(orders_emeralds) != 0:
-            emeralds_data = [[o.price, o.quantity] for o in orders_emeralds]
-        if len(orders_tomatoes) != 0:
-            tomatoes_data = [[o.price, o.quantity] for o in orders_tomatoes]
-        
-        memory[str(state.timestamp)] = [emeralds_data, tomatoes_data] 
         
         conversions = 0
-        traderData = json.dumps(memory, separators=(',', ':'))
 
+        #internal data stream (use print in prod)
+        emeralds_data = [[o.symbol, o.price, o.quantity] for o in orders_emeralds]
+        tomatoes_data = [[o.symbol, o.price, o.quantity] for o in orders_tomatoes]
+        self.logger.print(f"[DATA] {json.dumps({str(state.timestamp): [emeralds_data, tomatoes_data]})}")
+        
+        #trader data for algo
+        traderData = json.dumps(memory, separators=(',', ':'))
+        
         self.logger.flush(state, result, conversions, traderData)
  
         return result, conversions, traderData

@@ -116,7 +116,7 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str):
         if process.returncode == 0:
             try:
                 slog(f"  [PARSER]: Starting data extraction for {task_id}...")
-                if process_results(task_id, Path(log_path)) == 0:
+                if process_results(task_id, Path(log_path), Path(stream_log_path)) == 0:
                     raise Exception("Parser returned 0")
                 else:
                     slog("  [PARSER]: Success. Dash should now be populated")

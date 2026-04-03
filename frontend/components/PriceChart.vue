@@ -7,7 +7,7 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 
-const props = defineProps(['taskId', 'product', 'day', 'indicators', 'normalize', 'activeCategories', 'qtyRange', 'obLevels'])
+const props = defineProps(['taskId', 'product', 'day', 'indicators', 'normalize', 'activeCategories', 'qtyRange', 'obLevels', 'showAlgoOb'])
 const supabase = useSupabaseClient()
 const { subscribe, broadcast, broadcastHover } = useChartSync()
 const { fetchAll } = useFetchAll()
@@ -19,7 +19,9 @@ let chart        = null
 let series       = {}
 let primitive    = null
 let dayLinePrim  = null
+let algoObPrim   = null
 let rawTrades    = []
+let rawAlgoOb    = []
 
 const SHORT = { MAKER1: 'M1', TAKER1: 'T1', INFORMED1: 'I1', TOXIC: 'TX', ALGO: 'AL' }
 const FG    = { MAKER1: '#fff', TAKER1: '#000', INFORMED1: '#fff', TOXIC: '#fff', ALGO: '#000' }
@@ -198,6 +200,67 @@ function makePrimitive() {
   }
 }
 
+function makeAlgoObPrimitive() {
+  let _series  = null
+  let _chart   = null
+  let _request = null
+  let _orders  = []
+  let _pts     = []
+
+  const _view = {
+    renderer() {
+      return {
+        draw(target) {
+          if (!_pts.length) return
+          target.useBitmapCoordinateSpace(({ context: ctx, horizontalPixelRatio: hr, verticalPixelRatio: vr }) => {
+            for (const { x, y } of _pts) {
+              const cx = Math.round(x * hr)
+              const cy = Math.round(y * vr)
+              const r  = 7 * hr
+              const inner = r * 0.42
+              ctx.save()
+              ctx.fillStyle = '#000000'
+              ctx.beginPath()
+              for (let i = 0; i < 10; i++) {
+                const angle = (i * Math.PI / 5) - Math.PI / 2
+                const rad   = i % 2 === 0 ? r : inner
+                const px    = cx + rad * Math.cos(angle)
+                const py    = cy + rad * Math.sin(angle)
+                i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)
+              }
+              ctx.closePath()
+              ctx.fill()
+              ctx.restore()
+            }
+          })
+        }
+      }
+    },
+    zOrder() { return 'normal' }
+  }
+
+  return {
+    attached({ series, chart, requestUpdate }) { _series = series; _chart = chart; _request = requestUpdate },
+    detached() { _series = null; _chart = null; _request = null },
+    paneViews() { return [_view] },
+    updateAllViews() {
+      _pts = []
+      if (!_series || !_chart) return
+      const ts = _chart.timeScale()
+      for (const o of _orders) {
+        const x = ts.timeToCoordinate(o.time)
+        const y = _series.priceToCoordinate(o.price)
+        if (x == null || y == null) continue
+        _pts.push({ x, y })
+      }
+    },
+    setData(orders) {
+      _orders = orders
+      _request?.()
+    },
+  }
+}
+
 function makeDayLinePrimitive() {
   let _chart = null
   const _view = {
@@ -239,6 +302,9 @@ const clearSeries = () => {
   if (dayLinePrim && series.Ask) {
     try { series.Ask.detachPrimitive(dayLinePrim) } catch (e) {}
   }
+  if (algoObPrim && series.Ask) {
+    try { series.Ask.detachPrimitive(algoObPrim) } catch (e) {}
+  }
 
   Object.keys(series).forEach(key => {
     try { chart.removeSeries(series[key]) } catch (e) {}
@@ -247,11 +313,28 @@ const clearSeries = () => {
   series      = {}
   primitive   = null
   dayLinePrim = null
+  algoObPrim  = null
   rawTrades   = []
+  rawAlgoOb   = []
 }
 
 const pushMarkers = () => {
   primitive?.setData(rawTrades, props.activeCategories ?? [], props.qtyRange ?? [0, Infinity])
+}
+
+const pushAlgoOb = () => {
+  if (!series.Ask) return
+  if (props.showAlgoOb) {
+    if (!algoObPrim) {
+      algoObPrim = makeAlgoObPrimitive()
+      series.Ask.attachPrimitive(algoObPrim)
+    }
+    const algoTradeTimes = new Set(rawTrades.filter(t => t.cls === 'ALGO').map(t => Number(t.time)))
+    algoObPrim.setData(rawAlgoOb.filter(o => o.qty !== 0 && !algoTradeTimes.has(Number(o.time))))
+  } else if (algoObPrim) {
+    try { series.Ask.detachPrimitive(algoObPrim) } catch (e) {}
+    algoObPrim = null
+  }
 }
 
 const fetchData = async () => {
@@ -266,19 +349,25 @@ const fetchData = async () => {
     .select('*')
     .eq('backtest_id', props.taskId)
     .eq('symbol', props.product)
+  
+  let internalQuery = supabase.from('internal')
+    .select('*')
+    .eq('backtest_id', props.taskId)
+    .eq('product', props.product)
 
   if (props.day !== 'all') {
-    priceQuery = priceQuery.eq('day', props.day)
-    tradeQuery = tradeQuery.eq('day', props.day)
+    priceQuery    = priceQuery.eq('day', props.day)
+    tradeQuery    = tradeQuery.eq('day', props.day)
+    internalQuery = internalQuery.eq('day', props.day)
   }
 
-  const [priceRaw, tradeData] = await Promise.all([
+  const [priceRaw, tradeData, internalData] = await Promise.all([
     fetchAll(() => priceQuery.order('timestamp', { ascending: true })),
     fetchAll(() => tradeQuery.order('timestamp', { ascending: true })),
+    fetchAll(() => internalQuery.order('timestamp', { ascending: true })),
   ])
 
   clearSeries() 
-  
   
   let prc = priceRaw
   if (props.normalize !== 'None') {
@@ -370,12 +459,26 @@ const fetchData = async () => {
     })
     pushMarkers()
   }
+
+  if (internalData) {
+    internalData.forEach(o => {
+      let ref = 0
+      if (props.normalize !== 'None') {
+        const match = prc.find(p => p.timestamp === o.timestamp)
+        if (match) ref = match._ref
+      }
+      rawAlgoOb.push({ time: o.timestamp, price: o.order_price - ref, qty: o.order_quantity })
+    })
+    pushAlgoOb()
+  }
+
   chart.timeScale().fitContent()
 
 }
 
 watch([() => props.taskId, () => props.product, () => props.day, () => props.indicators, () => props.normalize, () => props.obLevels], fetchData, { deep: true })
 watch([() => props.activeCategories, () => props.qtyRange], pushMarkers, { deep: true })
+watch(() => props.showAlgoOb, pushAlgoOb)
 
 onMounted(async () => {
   lc = await import('lightweight-charts')

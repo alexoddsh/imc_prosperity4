@@ -11,6 +11,7 @@
           :activeCategories="activeCategories"
           :qtyRange="qtyRange"
           :obLevels="obLevels"
+          :showAlgoOb="showAlgoOb"
         />
       </div>
       <div class="sub-chart">
@@ -80,12 +81,23 @@
         </div>
       </div>
 
-      <div>
-        <span class="sl">order book</span>
-        <div class="checkbox-list">
-          <label v-for="lvl in [1, 2, 3]" :key="lvl">
-            <input type="checkbox" :value="lvl" v-model="obLevels"> L{{ lvl }}
-          </label>
+      <div class="bx">
+        <div>
+          <span class="sl">order book</span>
+          <div class="checkbox-list">
+            <label v-for="lvl in [1, 2, 3]" :key="lvl">
+              <input type="checkbox" :value="lvl" v-model="obLevels"> L{{ lvl }}
+            </label>
+          </div>
+        </div>
+        <div>
+          <span class="sl">show algo orders</span>
+          <button class="cat-grid button" @click="showAlgoOb=!showAlgoOb" 
+              :style="{
+              backgroundColor: showAlgoOb ? '#ffffff' : '#1b0606',
+              color: '#de0404',
+              opacity: showAlgoOb ? 1 : 0.4
+            }">{{ showAlgoOb }}</button>
         </div>
       </div>
 
@@ -154,6 +166,7 @@ const selectedInd = ref([])
 const indOpen = ref(false)
 const normBy = ref('None')
 const obLevels = ref([1])
+const showAlgoOb = ref(false)
 
 const stats    = ref({ trades: 0, own: 0, pnl: 0 })
 const hoverPnl = ref(null)
@@ -313,8 +326,7 @@ watch(selectedDay, () => {fetchSummaryStats(activeTaskId.value)})
 <style scoped>
 
 .app-wrapper {
-  margin-left: 5px;
-  width: calc(100vw - 5px);
+  width: calc(100vw);
 }
 
 .mono-select {
@@ -349,5 +361,12 @@ watch(selectedDay, () => {fetchSummaryStats(activeTaskId.value)})
   flex-direction: column;
   gap: 3px;
   font-size: 11px;
+}
+.bx {
+  display: flex;
+  flex-direction: row;
+}
+.bx div {
+  width: 50%;
 }
 </style>
