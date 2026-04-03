@@ -12,7 +12,7 @@ def compute_classes(product: str, pdf: pd.DataFrame, tdf: pd.DataFrame) -> bool 
     price_times = set(pdf["timestamp"])
     missing = trade_times - price_times
     if missing: 
-        raise KeyError(f"--[CLASSES]-- TDF and PDF not complete or corrupt for {product}")
+        raise KeyError(f"  [CLASSES]: TDF and PDF not complete or corrupt for {product}")
     
     try:
         pdf_indexed = pdf.set_index(["timestamp", "product"])
@@ -27,7 +27,7 @@ def compute_classes(product: str, pdf: pd.DataFrame, tdf: pd.DataFrame) -> bool 
                 trade_price = tdf.iloc[i]["price"]
                 volume = tdf.iloc[i]["quantity"]
                 if pd.isna(volume) or pd.isna(trade_price):
-                    raise ValueError(f"--[CLASSES]-- Volume or price data missing from TDF for {product}")
+                    raise ValueError(f"  [CLASSES]: Volume or price data missing from TDF for {product}")
 
                 mid_price = pdf_indexed.at[(timestamp, product), "mid_price"].item()
 
@@ -83,4 +83,4 @@ def compute_classes(product: str, pdf: pd.DataFrame, tdf: pd.DataFrame) -> bool 
             return True
         
     except Exception as e:
-        print(f"--[CLASSES]-- An error occured {e}")
+        print(f"  [CLASSES]: An error occured {e}")

@@ -1,7 +1,9 @@
 import os
-from pathlib import Path
+import logging
+import json
 import uuid
 import subprocess
+from pathlib import Path
 from datetime import datetime, timezone
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +30,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+uvicorn_access_logger = logging.getLogger("uvicorn.access")
+
+class LogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "/logs/" not in record.getMessage()
+
+uvicorn_access_logger.addFilter(LogFilter()) ## tell uvicorn to not stream INFO to stdcout
+
 url: str = os.environ.get("SUPABASE_URL")
 key: str = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(url, key)
@@ -51,15 +61,15 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str):
         env["PYTHONPATH"] = f"{algo_dir}:{env.get('PYTHONPATH', '')}"
 
         cmd = [
-            "/Users/alexoddsh/.local/share/virtualenvs/backend-dqIMmv-9/bin/prosperity4btx", 
+            binary_exec, 
             algo_path, 
             round_id, 
             "--out", log_path,
+            "--print"
         ]
 
-        print(f"\n--- [STARTING SIMULATION: {task_id}] ---")
-        print(f"  [EXEC]: {binary_exec}")
-
+        print(f"\n  [STARTING SIMULATION: {task_id}]")
+        
         stream_log_path = os.path.join(log_dir, f"{task_id}_stream.log")
 
         process = subprocess.Popen(
@@ -75,7 +85,24 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str):
         with open(stream_log_path, 'w') as stream_f:
             for line in process.stdout:
                 clean = line.strip()
-                print(f"  [PROSPERITY]: {clean}")
+                if not clean:
+                    continue
+
+                if clean.startswith('{'):
+                    try:
+                        data = json.loads(clean)
+                        sandbox_log = data.get("sandboxLog", "")
+                        if sandbox_log:
+                            for log_line in sandbox_log.splitlines():
+                                if log_line.strip():
+                                    print(f"  [ALGO]: {log_line.strip()}")
+                    except json.JSONDecodeError:
+                        pass 
+                
+                else:
+                    if "Successfully saved backtest results to" not in clean:
+                        print(f"  [PROSPERITY]: {clean}")
+
                 stream_f.write(clean + '\n')
                 stream_f.flush()
 
@@ -87,7 +114,6 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str):
                 f.write(msg + '\n')
 
         if process.returncode == 0:
-            slog(f"--- [SUCCESS: {task_id}] ---")
             try:
                 slog(f"  [PARSER]: Starting data extraction for {task_id}...")
                 if process_results(task_id, Path(log_path)) == 0:

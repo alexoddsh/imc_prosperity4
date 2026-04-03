@@ -14,11 +14,6 @@ STRATEGY IDEAS
 - derivatives
 - macroeconomic impacts
 
-BACKTESTING DATA
-We will use the following Library: pip install -U prosperity4btx (https://github.com/Xeeshan85/imc-prosperity-4-backtester).
-Run the following to backtest:
-
-
 IMPORTAN EXCHANGE MECHANICS
 - orders are IOC (Immediate or Cancel) and not Fill or Kill. That means that if an order is placed
   for 100 units bid at 100 and only 40 exist at that ask then the order is partially filled and the rest 

@@ -18,7 +18,8 @@ cp .env.example .env
 **Note** I didn't add to gitignore, please do so after you have copied the original. Also you have been invited to supabase. 
 
 ### 2. Binary Exec Path
-The system uses a custom binary prosperity4btx located in your virtualenv. Main.py reads this path from your .env file. So you after installing the executable (which is already a req in the pipfile) you need to find its path and add to .env.
+The system uses a custom binary prosperity4btx located in your virtualenv. Main.py reads this path from your .env file. So you after installing the executable (which is already a req in the pipfile) you need to find its path and add to .env. Read about how the backtester works at:
+- https://github.com/Xeeshan85/imc-prosperity-4-backtester
 
 ## Starting... & Using
 The backend uses FastAPI to manage simulation tasks. Start the server with: "uvicorn main:app --reload" or however you want to run it. Then start the frontend as usual with "npm run dev". Code your algo in the *backend/algos* folder. Try to name them something unique. So to be 100% I scrapped the vercel + railway hosting idea, just adds unneccessary lag 

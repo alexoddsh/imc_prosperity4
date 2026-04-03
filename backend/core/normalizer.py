@@ -4,7 +4,7 @@ def compute_wallmid1(product: str, pdf: pd.DataFrame) -> bool:
     mask = pdf["product"] == product.upper()
 
     if not mask.any():
-        raise ValueError(f"--[WALLMID1]--: No trades found in PDF for {product}")
+        raise ValueError(f" [WALLMID1]: No trades found in PDF for {product}")
 
     try:
         for i in pdf.index[mask]:
@@ -23,20 +23,20 @@ def compute_wallmid1(product: str, pdf: pd.DataFrame) -> bool:
                 if vsum !=0 and vol !=0:
                     vwaps[f"vwap_{t}"] = vsum / vol 
                 else:
-                    raise ValueError(f"--[WALLMID1]--: Wallmid could not be computed for{product}")
+                    raise ValueError(f"  [WALLMID1]: Wallmid could not be computed for{product}")
         
             pdf.at[i, "wallmid1"] = (vwaps["vwap_ask"] + vwaps["vwap_bid"]) / 2
             
         return True
         
     except Exception as e:
-        print(f"--[WALLMID1]--: An error occured: {e}")    
+        print(f"  [WALLMID1]: An error occured: {e}")    
 
 def compute_wallmid2(product: str, pdf: pd.DataFrame) -> bool:
     mask = pdf["product"] == product.upper()
 
     if not mask.any():
-        raise ValueError(f"--[WALLMID2]--: No trades found in PDF for {product}")
+        raise ValueError(f"  [WALLMID2]: No trades found in PDF for {product}")
 
     try:
         for i in pdf.index[mask]:
@@ -64,7 +64,7 @@ def compute_wallmid2(product: str, pdf: pd.DataFrame) -> bool:
         return True
     
     except Exception as e:
-        print(f"--[WALLMID2]-- An error occured: {e}")
+        print(f"  [WALLMID2]: An error occured: {e}")
 
 
 #v3

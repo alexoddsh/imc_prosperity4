@@ -15,7 +15,7 @@ def process_results(task_id: str, log_path: Path) -> int:
         ti = text.find("Trade History:\n")
 
         if ai == -1 or ti == -1:
-            print("--[ERROR]--: Could not find Activities log or Trade History ---")
+            print("  [ERROR]: Could not find Activities log or Trade History ---")
             return
 
         #prices
@@ -33,25 +33,25 @@ def process_results(task_id: str, log_path: Path) -> int:
         #pre insert computations (prices)
         products = prices[prices["timestamp"] == 0]["product"].to_list()
         if len(products) == 0:
-            raise ValueError("--[TRADES]--: No products where found in the TDF")
+            raise ValueError("  [TRADES]: No products where found in the TDF")
 
         for product in products:
-            print(f"--[WALLMID]--: Wallmid Classes for {product}")
+            print(f"  [WALLMID]: Wallmid Classes for {product}")
             success1 = normalizer.compute_wallmid1(product, prices)
             success2 = normalizer.compute_wallmid2(product, prices)
             if not success1 or not success2:
-                raise Exception(f"--[WALLMID]--: Pre compute failed {product}")
+                raise Exception(f"  [WALLMID]: Pre compute failed {product}")
 
         #prev insert computations (trades)
         for product in products:
-            print(f"--[CLASSIFICATION]--: Calculating Classes for {product}")
+            print(f"  [CLASSIFICATION]: Calculating Classes for {product}")
             success = classification.compute_classes(product, prices, trades)
             if not success:
-                raise Exception(f"--[CLASSIFICATION]--: Pre compute failed {product}")
-            print(f"--[POSITION]--: Calculating position for {product}")
+                raise Exception(f"  [CLASSIFICATION]: Pre compute failed {product}")
+            print(f"  [POSITION]: Calculating position for {product}")
             success = position.compute_position(product, trades)
             if not success:
-                raise Exception(f"--[POSITION]--: Pre compute failed {product}")
+                raise Exception(f"  [POSITION]: Pre compute failed {product}")
             
         prices.insert(0, "backtest_id", str(task_id))
         trades.insert(0, "backtest_id", str(task_id))
@@ -60,6 +60,6 @@ def process_results(task_id: str, log_path: Path) -> int:
         update_backtest_status(str(task_id), "COMPLETED", final_pnl)
 
     except Exception as e:
-        print(f"--[PARSER]--: Parser Failed: {e}")
+        print(f"  [PARSER]: Parser Failed: {e}")
         update_backtest_status(str(task_id), "FAILED")
         return 0

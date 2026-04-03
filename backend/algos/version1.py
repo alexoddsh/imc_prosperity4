@@ -15,16 +15,17 @@ POSITION_LIMITS = {
 EMERALDS = 10000
 
 class Trader:
-    def run(self, state: TradingState):
+
+    def __init__(self):
         self.logger = Logger()
+
+    def run(self, state: TradingState):
 
         if state.traderData:
             memory = jsonpickle.decode(state.traderData)
         else:
             memory = []
         
-        memory.append([state.timestamp, state.observations])
-
         result = {}
 
         for product in state.order_depths:
@@ -40,9 +41,11 @@ class Trader:
                 #1. take any profitable existing trades
                 if best_ask_price < 10000:
                     algo_buy_order_t1 = Order(product, best_ask_price, best_ask_vol)
+                    orders.append(algo_buy_order_t1)
                     net_position_margin -= best_ask_vol
                 if best_bid_price > 10000:
                     algo_sell_order_t1 = Order(product, best_bid_price, best_bid_vol)
+                    orders.append(algo_sell_order_t1)
                     net_position_margin += best_bid_vol
 
                 #2. make market just inside spread
@@ -53,12 +56,12 @@ class Trader:
                 algo_ask_vol = -int((net_position_margin - 1) / 2)
 
                 algo_buy_order_m1 = Order(product, algo_bid_price, algo_bid_vol)
-                algo_sell_order_m1 = Order(product, algo_ask_price, algo_ask_vol)
+                if algo_buy_order_m1:
+                    orders.append(algo_buy_order_m1) 
 
-                orders.append(algo_buy_order_t1)
-                orders.append(algo_sell_order_t1)
-                orders.append(algo_buy_order_m1) 
-                orders.append(algo_sell_order_m1)
+                algo_sell_order_m1 = Order(product, algo_ask_price, algo_ask_vol)
+                if algo_sell_order_m1:
+                    orders.append(algo_sell_order_m1)
 
                 result[product] = orders
             

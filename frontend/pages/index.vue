@@ -148,7 +148,7 @@ const { fetchAll } = useFetchAll()
 
 const activeTaskId = ref('')
 const isRunning = ref(false)
-const algoName = ref('algo.py')
+const algoName = ref('version.py')
 const roundId = ref('0')
 const recentRuns = ref([])
 const availableProducts = ref([])
