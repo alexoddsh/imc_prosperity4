@@ -2,8 +2,8 @@ from datamodel import TradingState, Order
 import json
 
 #PRODUCT TYPE MAPPING
-EMERALDS = "PURE_MARKET"
-TOMATOES = "DRIFT_MARKET"
+PURE_MARKET = "EMERALDS"
+DRIFT_MARKET = "TOMATOES"
 
 #POSITION LIMITS
 POSITION_LIMITS = {
@@ -14,7 +14,7 @@ POSITION_LIMITS = {
 #TRUE PRICE
 EMERALDS = 10000
 
-#For internal logging system
+#For internal logging system (needs to be in file to work on both systems)
 class Logger:
     def __init__(self) -> None:
         self.logs = ""
@@ -102,14 +102,12 @@ class Trader:
                 continue
         
         conversions = 0
+        traderData = json.dumps(memory, separators=(',', ':'))
 
-        #internal logging
+        #internal logging (can add as products but needs to be in same format to work)
         emeralds_data = [[o.symbol, o.price, o.quantity] for o in orders_emeralds]
         tomatoes_data = [[o.symbol, o.price, o.quantity] for o in orders_tomatoes]
         self.logger.print(f"[DATA] {json.dumps({str(state.timestamp): [emeralds_data, tomatoes_data]})}")
-
-        #for algo
-        traderData = json.dumps(memory, separators=(',', ':'))
 
         self.logger.flush(state, result, conversions, traderData)
         return result, conversions, traderData

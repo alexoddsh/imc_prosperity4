@@ -25,7 +25,7 @@ def compute_wallmid1(product: str, pdf: pd.DataFrame) -> bool:
                 else:
                     raise ValueError(f"  [WALLMID1]: Wallmid could not be computed for{product}")
         
-            pdf.at[i, "wallmid1"] = int((vwaps["vwap_ask"] + vwaps["vwap_bid"]) / 2)
+            pdf.at[i, "wallmid1"] = round(((vwaps["vwap_ask"] + vwaps["vwap_bid"]) / 2), 2) 
             
         return True
         
@@ -59,7 +59,7 @@ def compute_wallmid2(product: str, pdf: pd.DataFrame) -> bool:
             bid_lvl_price = pdf.at[i, f"bid_price_{bid_lvl_idx+1}"]
             ask_lvl_price = pdf.at[i, f"ask_price_{ask_lvl_idx+1}"]
             
-            pdf.at[i, "wallmid2"] = (ask_lvl_price + bid_lvl_price) / 2
+            pdf.at[i, "wallmid2"] = round(((ask_lvl_price + bid_lvl_price) / 2), 2)
         
         return True
     

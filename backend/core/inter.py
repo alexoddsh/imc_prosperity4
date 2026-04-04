@@ -3,7 +3,7 @@ import json
 
 def parse_internal(raw_logs: dict, intdf: pd.DataFrame) -> bool:
     rows = []
-    
+
     try:
         for (i, day), row in raw_logs.items():
             entry = json.loads(row)
