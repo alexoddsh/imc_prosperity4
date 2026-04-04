@@ -26,9 +26,13 @@ The backend uses FastAPI to manage simulation tasks. Start the server with: "uvi
 when we can both easily run it locally for ourselves. The only main thing to think about as usual is to not push incompatible stuff (obvs) so generally these are not to be touched at all:
 
 1. main.py
-2. first half of parser.py
+2. core/parser.py (first half)
 3. logger class 
 4. existing frontend implementation
+
+### Two ways to get data in
+- **Run backtester** (`POST /run/`) — triggers the `prosperity4btx` binary with your algo file and a round ID. Results are streamed and auto-parsed.
+- **Upload official log** (`POST /upload-json`) — upload a `.log` file downloaded from the Prosperity website (JSON format). Skips the backtester entirely, parses directly into the DB. Useful for analyzing competition results.
 
 **Adding columns in Supabase?** Rows accumulate QUICKLY so generally two main points. A) delete data from scrap runs B) use alembic migs or default values in code when adding columns as to not nuke any previous runs. 
 
@@ -74,29 +78,33 @@ To parse `[DATA]` entries after a run, scan the `_stream.log` file for JSON line
 See the datamodels file in algos for the full Logger class!
 
 ## Dev - Computations
-- `parser.py` parses the `task_id.log`, parser currently doesn't do anything with the stdcout stream output but note the API route defined in main.py (/logs/{task_id}") which is currently used in the frontend build to stream everything to the small box in the sidebar. The first half "trades" and "prices" simply reads and constructs the dataframes
-for insertion in our Supabase SQL DB nothing to touch there.
+- `core/parser.py` handles both input modes. For the backtester it reads the `.log` file + `_stream.log`. For official uploads it reads the JSON directly. Either way it produces the same three DataFrames: `prices`, `trades`, `internal` — so everything downstream is identical.
+
+The `internal` df is built from `[DATA]` log entries via `core/inter.py` and stored in the Supabase `internal` table.
 
 The second half calls all the **pre computations** defined in */backend/core*. These computations modify the created
 dataframe BEFORE inserting in the DB which is done at the end, this as it is a lot easier to NOT have to modify any
 existing data in Supabase. This keeps the flow coherently tied only to pandas/np mgmt and database data is always good. **NOTE** here that all computations return a bool `True` **IF and and ONLY IF** the full computations complete perfectly. And only **IF** all computations return `True` do we persist a run in the db, otherwise it is discarded.
 
-See this example from the parser file:
+Current computation pipeline (in order):
 ```python
-#prev insert computations (trades)
-    for product in products:
-        print(f"--[CLASSIFICATION]--: Calculating Classes for {product}")
-        success = classification.compute_classes(product, prices, trades)
-        if not success:
-            raise Exception(f"--[CLASSIFICATION]--: Pre compute failed {product}")
-        print(f"--[POSITION]--: Calculating position for {product}")
-        success = position.compute_position(product, trades)
-        if not success:
-            raise Exception(f"--[POSITION]--: Pre compute failed {product}")
+# prices pre-compute
+normalizer.compute_wallmid1(product, prices)   # core/normalizer.py
+normalizer.compute_wallmid2(product, prices)
+
+# trades pre-compute
+classification.compute_classes(product, prices, trades)  # core/classification.py
+position.compute_position(product, trades)               # core/position.py
 ```
 
-- Why? This ensures a *fail-first* pattern, debugging messy data is a headache, so the general principle in files are
-no stupid ffils, default values etc. if we expect a value and it is not there then the run should fail 100%. 
+Then all three tables are inserted via `fast_pg_insert` from `database.py`:
+```python
+fast_pg_insert(trades, "trades")
+fast_pg_insert(prices, "prices")
+fast_pg_insert(internal, "internal")
+```
+
+- Why fail-first? Debugging messy data is a headache, so the general principle is no stupid ffils, default values etc. if we expect a value and it is not there then the run should fail 100%. 
 
 ## Dev - Frontend 
 Just look for yourself is pretty self explanatory, just one **MAJOR** point, if you look at the files you will see some logic in the "fetches" that looks kinda weird but is just conditionally stiching day-1 and day-2 data together. This also explains our general approach to the day mgmt:

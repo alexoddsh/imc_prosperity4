@@ -49,6 +49,7 @@ body, html, #__nuxt {
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .main-chart { height: 60%; border-bottom: 1px solid var(--border-color); }

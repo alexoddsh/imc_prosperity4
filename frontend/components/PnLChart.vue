@@ -28,8 +28,9 @@ const fetchData = async () => {
   if (props.day !== 'all' && props.day !== '') {
     query = query.eq('day', props.day)
   }
+  query = query.order('timestamp', { ascending: true })
 
-  const rawData = await fetchAll(() => query.order('timestamp', { ascending: true }))
+  const rawData = await fetchAll(() => query)
   if (!rawData?.length) return
 
   let chartPoints = []

@@ -6,5 +6,6 @@
     ],
     "python.analysis.extraPaths": [
         "${workspaceFolder}/backend/algos"
-    ]
+    ],
+    "explorer.autoReveal": false,
 }

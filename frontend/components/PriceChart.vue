@@ -20,8 +20,11 @@ let series       = {}
 let primitive    = null
 let dayLinePrim  = null
 let algoObPrim   = null
-let rawTrades    = []
-let rawAlgoOb    = []
+let rawTrades      = []
+let rawAlgoOb      = []
+let cachedPriceRaw    = null
+let cachedTradeData   = null
+let cachedInternalData = null
 
 const SHORT = { MAKER1: 'M1', TAKER1: 'T1', INFORMED1: 'I1', TOXIC: 'TX', ALGO: 'AL' }
 const FG    = { MAKER1: '#fff', TAKER1: '#000', INFORMED1: '#fff', TOXIC: '#fff', ALGO: '#000' }
@@ -337,38 +340,11 @@ const pushAlgoOb = () => {
   }
 }
 
-const fetchData = async () => {
-  if (!lc || !chart || !props.taskId || !props.product || !props.day) return
+const renderChart = (priceRaw, tradeData, internalData) => {
+  if (!lc || !chart || !priceRaw) return
 
-  let priceQuery = supabase.from('prices')
-    .select('*')
-    .eq('backtest_id', props.taskId)
-    .eq('product', props.product)
+  clearSeries()
 
-  let tradeQuery = supabase.from('trades')
-    .select('*')
-    .eq('backtest_id', props.taskId)
-    .eq('symbol', props.product)
-  
-  let internalQuery = supabase.from('internal')
-    .select('*')
-    .eq('backtest_id', props.taskId)
-    .eq('product', props.product)
-
-  if (props.day !== 'all') {
-    priceQuery    = priceQuery.eq('day', props.day)
-    tradeQuery    = tradeQuery.eq('day', props.day)
-    internalQuery = internalQuery.eq('day', props.day)
-  }
-
-  const [priceRaw, tradeData, internalData] = await Promise.all([
-    fetchAll(() => priceQuery.order('timestamp', { ascending: true })),
-    fetchAll(() => tradeQuery.order('timestamp', { ascending: true })),
-    fetchAll(() => internalQuery.order('timestamp', { ascending: true })),
-  ])
-
-  clearSeries() 
-  
   let prc = priceRaw
   if (props.normalize !== 'None') {
     const NORM_KEY = { Mid: 'mid_price', WallMid1: 'wallmid1', WallMid2: 'wallmid2' }
@@ -418,7 +394,6 @@ const fetchData = async () => {
     series[`Bid${lvl}`] = bidS
   }
 
-  // series.Ask = first available ask series (for primitive attachment + price line)
   series.Ask = series.Ask1 ?? series.Ask2 ?? series.Ask3
 
   if (props.indicators.includes('Mid')) {
@@ -473,10 +448,51 @@ const fetchData = async () => {
   }
 
   chart.timeScale().fitContent()
-
 }
 
-watch([() => props.taskId, () => props.product, () => props.day, () => props.indicators, () => props.normalize, () => props.obLevels], fetchData, { deep: true })
+const fetchData = async () => {
+  if (!lc || !chart || !props.taskId || !props.product || !props.day) return
+
+  let priceQuery = supabase.from('prices')
+    .select('*')
+    .eq('backtest_id', props.taskId)
+    .eq('product', props.product)
+
+  let tradeQuery = supabase.from('trades')
+    .select('*')
+    .eq('backtest_id', props.taskId)
+    .eq('symbol', props.product)
+
+  let internalQuery = supabase.from('internal')
+    .select('*')
+    .eq('backtest_id', props.taskId)
+    .eq('product', props.product)
+
+  if (props.day !== 'all') {
+    priceQuery    = priceQuery.eq('day', props.day)
+    tradeQuery    = tradeQuery.eq('day', props.day)
+    internalQuery = internalQuery.eq('day', props.day)
+  }
+
+  priceQuery    = priceQuery.order('timestamp', { ascending: true })
+  tradeQuery    = tradeQuery.order('timestamp', { ascending: true })
+  internalQuery = internalQuery.order('timestamp', { ascending: true })
+
+  const [priceRaw, tradeData, internalData] = await Promise.all([
+    fetchAll(() => priceQuery),
+    fetchAll(() => tradeQuery),
+    fetchAll(() => internalQuery),
+  ])
+
+  cachedPriceRaw     = priceRaw
+  cachedTradeData    = tradeData
+  cachedInternalData = internalData
+
+  renderChart(priceRaw, tradeData, internalData)
+}
+
+watch([() => props.taskId, () => props.product, () => props.day], fetchData)
+watch([() => props.indicators, () => props.normalize, () => props.obLevels], () => renderChart(cachedPriceRaw, cachedTradeData, cachedInternalData), { deep: true })
 watch([() => props.activeCategories, () => props.qtyRange], pushMarkers, { deep: true })
 watch(() => props.showAlgoOb, pushAlgoOb)
 

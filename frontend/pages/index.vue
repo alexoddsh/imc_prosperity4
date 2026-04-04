@@ -133,8 +133,13 @@
         </div>
       </div>
 
-
       <div style="margin-top: auto;">
+        <div class="upload-container">
+          <input type="file" accept=".log" @change="handleFileUpload"/>
+        </div>
+      </div>
+
+      <div>
         <span class="sl">algo</span>
         <input v-model="algoName" class="raw-input" style="margin-bottom: 8px;" />
         <span class="sl">round</span>
@@ -219,6 +224,28 @@ const runBacktest = async () => {
   }
 }
 
+const handleFileUpload = async (event) => {
+  const file = event.target.files[0]
+  if (!file) return 
+
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('algo_file', algoName.value)
+  formData.append('round', roundId.value)
+
+  isRunning.value = true
+  try {
+    const res = await $fetch(`${config.public.apiBase}/upload-json` ,{
+      method: 'POST',
+      body: formData
+    })
+    activeTaskId.value = res.task_id
+    pollStatus(res.task_id)
+  } catch (e) {
+    isRunning.value = false
+  }
+}
+
 const pollStatus = (id) => {
   const timer = setInterval(async () => {
     const { data } = await supabase.from('backtest_runs').select('status').eq('id', id).single()
@@ -260,9 +287,11 @@ const fetchSummaryStats = async (id) => {
     ownTradeQuery = ownTradeQuery.eq('day', selectedDay.value)
   }
 
+  priceQuery = priceQuery.order('day').order('timestamp')
+
   try {
     const [rows, { count: trdCount }, { count: ownCount }] = await Promise.all([
-      fetchAll(() => priceQuery.order('day').order('timestamp')),
+      fetchAll(() => priceQuery),
       tradeQuery,
       ownTradeQuery,
     ])
