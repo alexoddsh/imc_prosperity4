@@ -24,9 +24,10 @@ class Logger:
 
 
 class MarketTrader:
-    def __init__(self, product, state):
+    def __init__(self, product, state, logger):
         self.product = product #what product this instance trades
         self.state = state 
+        self.logger = logger
         
         self.position_limit = POSITION_LIMITS.get(self.product.upper(), 0)
         self.current_position = self.state.position.get(self.product.upper(), 0) 
@@ -35,7 +36,7 @@ class MarketTrader:
         self.best_ask_price, self.best_ask_volume = self.get_best_ask()
         self.buy_orders, self.sell_orders = self.get_order_depths()
 
-        self.wall_mid1, self.wall_mid2 = self.compute_wallmid1(), self.compute_wallmid1()
+        self.wall_mid1, self.wall_mid2 = self.compute_wallmid1(), self.compute_wallmid2()
 
     def bid(self, bp, bv, orders):
         orders.append(Order(self.product, bp, int(bv)))
@@ -52,12 +53,8 @@ class MarketTrader:
         return bap, bav
     
     def get_order_depths(self):
-        for i in self.state.order_depths: 
-            if i == self.product:
-                product_depth = self.state.order_depths[self.product]
-                buy_orders = product_depth.buy_orders
-                sell_orders = product_depth.sell_orders
-        return buy_orders, sell_orders
+        depth = self.state.order_depths[self.product]
+        return depth.buy_orders, depth.sell_orders
 
     def compute_wallmid1(self):
         vwaps = []
@@ -73,25 +70,20 @@ class MarketTrader:
         return wallmid
     
     def compute_wallmid2(self):
-        swqty = max(self.sell_orders.values())
-        swpr = 0
-        for key, val in self.sell_orders.items():
-            if val == swqty:
-                swpr = key
+        b_vols = list(self.buy_orders.values())
+        s_vols = list(self.sell_orders.values())
         
-        bwqty = max(self.buy_orders.values())
-        bwpr = 0
-        for key, val in self.buy_orders.items():
-            if val == bwqty:
-                bwpr = key
+        b_max = max(b_vols)
+        s_max = min(s_vols)  
         
-        wallmid = round(((swpr + bwpr) / 2), 2)
-        return wallmid
-
+        b_prc = list(self.buy_orders.keys())[b_vols.index(b_max)]
+        s_prc = list(self.sell_orders.keys())[s_vols.index(s_max)]
+        
+        return round((b_prc + s_prc) / 2, 2)
 
 class BasicMaker(MarketTrader):
-    def __init__(self, product, state):
-        super().__init__(product, state)
+    def __init__(self, product, state, logger):
+        super().__init__(product, state, logger)
 
     def produce_orders(self):
         orders = []
@@ -99,20 +91,20 @@ class BasicMaker(MarketTrader):
 
             ##TAKING ALL PROFITABLE
             for sp, sv in self.sell_orders.items():
-                if sp < self.wall_mid2:
+                if int(sp) < self.wall_mid2:
                     self.bid(sp, sv, orders)
             
             for bp, bv in self.buy_orders.items():
-                if bp > self.wall_mid2:
+                if int(bp) > self.wall_mid2:
                     self.ask(bp, bv, orders)
             
             ##MAKING MARKET
             skew_rate = self.current_position / self.position_limit
-            if self.best_ask_price - 1 > self.wall_mid2:
+            if int(self.best_ask_price - 1) > self.wall_mid2:
                 vol_order = (self.position_limit - abs(self.current_position) / 2) * (1+skew_rate)
                 self.ask(self.best_ask_price-1, vol_order, orders)
             
-            if self.best_bid_price + 1 < self.wall_mid2:
+            if int(self.best_bid_price + 1) < self.wall_mid2:
                 vol_order = (self.position_limit - abs(self.current_position) / 2) * (1-skew_rate)
                 self.bid(self.best_bid_price+1, vol_order, orders)
                 
@@ -131,7 +123,7 @@ class Trader:
             "EMERALDS": BasicMaker
         }
         for product, trader in traders.items():
-            trader_instance = trader(product, state)
+            trader_instance = trader(product, state, self.logger)
 
             orders = trader_instance.produce_orders()
             product_orders = orders[product]

@@ -116,6 +116,16 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
         trades.insert(0, "backtest_id", str(task_id))
         internal.insert(0, "backtest_id", str(task_id))
 
+        # Force ints (becomes floats because of NaNs)
+        cols_to_fix = [
+            'bid_price_1', 'bid_volume_1', 'bid_price_2', 'bid_volume_2', 'bid_price_3', 'bid_volume_3',
+            'ask_price_1', 'ask_volume_1', 'ask_price_2', 'ask_volume_2', 'ask_price_3', 'ask_volume_3'
+        ]
+
+        for col in cols_to_fix:
+            if col in prices.columns:
+                prices[col] = prices[col].fillna(0).astype('int32')
+
         fast_pg_insert(trades, "trades")
         fast_pg_insert(prices, "prices")
         fast_pg_insert(internal, "internal")

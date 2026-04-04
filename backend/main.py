@@ -84,9 +84,14 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str):
                             for log_line in sandbox_log.splitlines():
                                 if log_line.strip() and not log_line.strip().startswith("[DATA]"):
                                     print(f"  [ALGO]: {log_line.strip()}")
+                         # ADD THIS:                                                                                                                        
+                        lambda_log = data.get("lambdaLog", "")                    
+                        if lambda_log.strip():                                                                                                             
+                            for log_line in lambda_log.splitlines():
+                                if log_line.strip():                                                                                                       
+                                    print(f"  [ALGO]: {log_line.strip()}")
                     except json.JSONDecodeError:
                         pass 
-                
                 else:
                     if "Successfully saved backtest results to" not in clean:
                         print(f"  [PROSPERITY]: {clean}")
