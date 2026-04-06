@@ -21,6 +21,7 @@ load_dotenv(dotenv_path=env_path)
 
 url: str = os.environ.get("SUPABASE_URL")
 key: str = os.environ.get("SUPABASE_KEY")
+dev_name: str = os.environ.get("DEV_NAME", "unknown")
 supabase: Client = create_client(url, key)
 
 uvicorn_access_logger = logging.getLogger("uvicorn.access")
@@ -155,6 +156,7 @@ async def run_backtest(req: RunRequest, background_tasks: BackgroundTasks):
             "id": task_id,
             "algo_name": req.algo_file,
             "round_id": req.round,
+            "dev": dev_name,
             "status": "PENDING",
             "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()
@@ -182,6 +184,7 @@ async def proccess_json(file: UploadFile = File(...), algo_file: str = Form(...)
             "id": task_id,
             "algo_name": algo_file,
             "round_id": round,
+            "dev": dev_name,
             "status": "PENDING",
             "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()

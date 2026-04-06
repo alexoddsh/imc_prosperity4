@@ -1,7 +1,8 @@
 import pandas as pd
 
 ##note simple file for now but we could use to calculate more complex position logic later
-#for now just computes going position
+#for now just computes going position but maybe could implement more complex "skew" testing for backtest to for
+#example see how would position have changed if we did X Y Z
 
 def compute_position(product: str, tdf: pd.DataFrame) -> bool:
     mask = tdf["symbol"] == product.upper()
@@ -9,7 +10,7 @@ def compute_position(product: str, tdf: pd.DataFrame) -> bool:
     if not mask.any():
         raise ValueError(f"--[POSITION]--: No data in PDF for {product}")
 
-    tdf.loc[mask, "algo_position"] = 0.0
+    tdf.loc[mask, "algo_position"] = 0
 
     try:
         for day, day_tdf in tdf[mask].groupby("day"):

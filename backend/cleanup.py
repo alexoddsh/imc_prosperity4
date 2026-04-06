@@ -1,9 +1,9 @@
 """
 Periodic cleanup job — runs every INTERVAL_MINUTES in the background.
 
-Rules:
+Rules (all except #3 wait GRACE_MINUTES before acting):
   1. Delete FAILED runs
-  2. Delete completed runs with total_pnl = 0
+  2. Delete completed runs with total_pnl < MIN_PNL
   3. Delete PENDING runs stuck for > STUCK_MINUTES
   4. For every round that is not the latest, keep only top TOP_N_PREV_ROUNDS by PnL
   5. After AGE_HOURS hours, keep only the top TOP_N_GLOBAL runs globally
@@ -21,24 +21,34 @@ log = logging.getLogger(__name__)
 
 INTERVAL_MINUTES  = 30
 STUCK_MINUTES     = 10
-TOP_N_PREV_ROUNDS = 10
-TOP_N_GLOBAL      = 20
+GRACE_MINUTES     = 15
+MIN_PNL           = 20
+TOP_N_PREV_ROUNDS = 20
+TOP_N_GLOBAL      = 100
 AGE_HOURS         = 3
 
 
 def _rule_failed(conn) -> list[str]:
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=GRACE_MINUTES)
     rows = conn.execute(
-        text("SELECT id FROM backtest_runs WHERE status = 'FAILED'")
+        text(
+            "SELECT id FROM backtest_runs "
+            "WHERE status = 'FAILED' AND created_at < :cutoff"
+        ),
+        {"cutoff": cutoff},
     ).fetchall()
     return [r[0] for r in rows]
 
 
-def _rule_zero_pnl(conn) -> list[str]:
+def _rule_low_pnl(conn) -> list[str]:
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=GRACE_MINUTES)
     rows = conn.execute(
         text(
             "SELECT id FROM backtest_runs "
-            "WHERE status = 'COMPLETED' AND (total_pnl = 0 OR total_pnl IS NULL)"
-        )
+            "WHERE status = 'COMPLETED' AND created_at < :cutoff "
+            "AND (total_pnl < :min_pnl OR total_pnl IS NULL)"
+        ),
+        {"cutoff": cutoff, "min_pnl": MIN_PNL},
     ).fetchall()
     return [r[0] for r in rows]
 
@@ -57,6 +67,7 @@ def _rule_stuck_pending(conn) -> list[str]:
 
 def _rule_prev_rounds_bottom(conn) -> list[str]:
     """For every round except the most recent, delete runs ranked below TOP_N_PREV_ROUNDS."""
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=GRACE_MINUTES)
     rows = conn.execute(
         text(
             """
@@ -74,12 +85,13 @@ def _rule_prev_rounds_bottom(conn) -> list[str]:
                        ) AS rn
                 FROM backtest_runs
                 WHERE status = 'COMPLETED'
+                  AND created_at < :cutoff
                   AND round_id NOT IN (SELECT round_id FROM latest_round)
             )
             SELECT id FROM ranked WHERE rn > :top_n
             """
         ),
-        {"top_n": TOP_N_PREV_ROUNDS},
+        {"cutoff": cutoff, "top_n": TOP_N_PREV_ROUNDS},
     ).fetchall()
     return [r[0] for r in rows]
 
@@ -113,7 +125,7 @@ def run_cleanup():
         with engine.begin() as conn:
             to_delete: set[str] = set()
             to_delete.update(_rule_failed(conn))
-            to_delete.update(_rule_zero_pnl(conn))
+            to_delete.update(_rule_low_pnl(conn))
             to_delete.update(_rule_stuck_pending(conn))
             to_delete.update(_rule_prev_rounds_bottom(conn))
             to_delete.update(_rule_global_top_n(conn))

@@ -25,9 +25,9 @@ The system uses a custom binary prosperity4btx located in your virtualenv. Main.
 The backend uses FastAPI to manage simulation tasks. Start the server with: "uvicorn main:app --reload" or however you want to run it. Then start the frontend as usual with "npm run dev". Code your algo in the *backend/algos* folder. Try to name them something unique. So to be 100% I scrapped the vercel + railway hosting idea, just adds unneccessary lag 
 when we can both easily run it locally for ourselves. The only main thing to think about as usual is to not push incompatible stuff (obvs) so generally these are not to be touched at all:
 
-1. main.py
-2. core/parser.py (first half)
-3. logger class 
+1. `main.py`
+2. `core/parser.py` (first half)
+3. `Logger.flush()` output format (the JSON shape that `main.py` and `inter.py` depend on)
 4. existing frontend implementation
 
 ### Two ways to get data in
@@ -41,11 +41,11 @@ Runs once on startup and then every 30 minutes in the background. It deletes fro
 
 | Rule | What gets deleted |
 | :--- | :--- |
-| Failed runs | Any run with `status = 'FAILED'` |
-| Zero PnL | Completed runs with `total_pnl = 0` or `NULL` |
+| Failed runs | Any run with `status = 'FAILED'` older than 15 min |
+| Low PnL | Completed runs with `total_pnl < 20` (or `NULL`) older than 15 min |
 | Stuck pending | `PENDING` runs older than 10 min (backtest never finished) |
-| Previous-round bottom | For every round except the most recent, keeps only the top 10 by PnL |
-| Global top-N | For runs older than 3 hours, keeps only the top 20 globally |
+| Previous-round bottom | For every round except the most recent, keeps only the top 20 by PnL (15 min grace) |
+| Global top-N | For runs older than 3 hours, keeps only the top 100 globally |
 
 ## Dev - Simulation and Logs 
 - `main.py` -> runs the prosperity4btx backtester executable against the specified algo file in */backend/algos*. Two log files are produced per run, both written into */backend/logs/*:
@@ -56,40 +56,47 @@ The Logger class (defined in each algo file — not `datamodel.py`) accumulates 
 
 | Channel | Destination | Purpose | Format | Best Practice |
 | :--- | :--- | :--- | :--- | :--- |
-| **`self.logger.print()`** | `stream.log` + terminal | **Humans.** Real-time debugging and terminal milestones. | Plain Text / String | Use sparingly (e.g., every 1000 ticks) to avoid terminal spam. |
-| **`self.logger.print("[DATA] ...")`** | `stream.log` only (silent) | **Post-run parsing.** Store structured data (orders, signals) per timestamp for offline analysis. | `[DATA] ` prefix + JSON string | **Use this for high-frequency data** (every tick). The `[DATA]` prefix is filtered from terminal output by `main.py` but is written to the stream log. **CRITICAL: this must be the ONLY `self.logger.print()` call in a given tick.** `inter.py` parses internal data by stripping `[DATA] ` from the entire `sandboxLog` and calling `json.loads()` on the result — if you mix in any plain debug print in the same tick, `sandboxLog` becomes `"debug msg\n{json}"` which is not valid JSON and crashes the parser. |
+| **`self.logger.print()`** | `{task_id}_stream.log` + terminal | **Humans.** Real-time debugging and terminal milestones. | Plain Text / String | **Cannot coexist with `[DATA]` on the same tick** (see below). Only use on ticks where you are NOT logging `[DATA]`. |
+| **`self.logger.print("[DATA] ...")`** | `{task_id}_stream.log` only (silent) | **Post-run parsing.** Store structured data (orders, signals) per timestamp for offline analysis. | `[DATA] ` prefix + JSON string | **Use this every tick.** The `[DATA]` prefix is filtered from terminal output by `main.py` but is written to the stream log. **CRITICAL: this must be the ONLY `self.logger.print()` call on any tick where it runs.** `inter.py` parses internal data by stripping `[DATA] ` from the entire `sandboxLog` and calling `json.loads()` — mixing in any other print on the same tick corrupts the JSON and crashes the parser. |
 | **`traderData`** | Internal State / `lambdaLog` | **The Machine.** Persistent memory to pass variables to the next round. | JSON | **50k char limit in competition.** Only store what the bot needs to remember between ticks. Do NOT use this for logging. |
-| **`print()`** | `sandboxLog` / raw stdout | **Terminal only, no log file.** Raw Python `print()` does appear in the terminal (via `sandboxLog` or the backtester's `--print` flag), but is **not** written to `stream.log` and cannot be post-parsed. | — | Avoid in production algo code. Use `self.logger.print()` so output is captured in the stream log. |
+| **`print()`** | raw stdout / terminal | **Terminal only, not in stream log.** Raw Python `print()` does appear in the terminal (via the backtester's `--print` flag), but is **not** written to `{task_id}_stream.log` and cannot be post-parsed. | — | Avoid in algo code. Use `self.logger.print()` so output is captured in the stream log. |
 
 When writing your `run` method, follow this sequence to ensure the backtester captures everything correctly:
 
 1. **Read Memory**: 
-   `memory = jsonpickle.decode(state.traderData) if state.traderData else {}`
+   `memory = json.loads(state.traderData) if state.traderData else {}`
 
-2. **Log for u (Stream)**: 
-   `self.logger.print(f"Timestamp {state.timestamp}: Signal is {my_signal}")`
+2. **Build orders, compute signals, etc.**
 
-3. **Save for Algo (Memory)**: 
-   `traderData = jsonpickle.encode(memory)`
+3. **Log `[DATA]`** (the only `self.logger.print()` call per tick): 
+   `self.logger.print(f"[DATA] {json.dumps({str(state.timestamp): logs})}")`
 
-4. **Output at EOF run() method**: 
+4. **Save for Algo (Memory)**: 
+   `traderData = json.dumps(memory)`
+
+5. **Output at EOF run() method**: 
    `self.logger.flush(state, result, conversions, traderData)`
    `return result, conversions, traderData`
 
-Examples:
+Example (see `algos/version4.py` for a full working version):
 
 ```python
 def run(self, state: TradingState):
-    # TERMINAL OUTPUT — shows in terminal during run, use sparingly
-    if state.timestamp % 1000 == 0:
-        self.logger.print(f"Timestamp {state.timestamp}: Position is {state.position.get('EMERALDS', 0)}")
+    memory = json.loads(state.traderData) if state.traderData else {}
+    result = {}
+    logs = []
 
-    # SILENT DATA LOG — written to stream.log but NOT printed to terminal
-    # Use this for every-tick structured data you want to parse afterwards
-    self.logger.print(f"[DATA] {json.dumps({'ts': state.timestamp, 'orders': [[o.price, o.quantity] for o in my_orders]})}")
+    # ... build orders, compute signals ...
+
+    # ONE logger.print per tick — only [DATA], nothing else
+    self.logger.print(f"[DATA] {json.dumps({str(state.timestamp): logs})}")
+
+    traderData = json.dumps(memory)
+    self.logger.flush(state, result, conversions, traderData)
+    return result, conversions, traderData
 ```
 
-To parse `[DATA]` entries after a run, scan the `_stream.log` file for JSON lines, extract `sandboxLog`, and filter for lines starting with `[DATA]`.
+`inter.py` parses the `{task_id}_stream.log` after the run: it reads each JSON line, extracts `sandboxLog`, strips the `[DATA] ` prefix, and `json.loads()` the remainder. This is why only one `self.logger.print()` call is allowed per tick.
 
 The Logger class is **not** in `datamodel.py` — it is copy-pasted directly into each algo file. Check any existing algo (e.g. `algos/version1.py`) to see the full implementation.
 
@@ -100,7 +107,7 @@ The `internal` df is built from `[DATA]` log entries via `core/inter.py` and sto
 
 The second half calls all the **pre computations** defined in */backend/core*. These computations modify the created
 dataframe BEFORE inserting in the DB which is done at the end, this as it is a lot easier to NOT have to modify any
-existing data in Supabase. This keeps the flow coherently tied only to pandas/np mgmt and database data is always good. **NOTE** here that all computations return a bool `True` **IF and and ONLY IF** the full computations complete perfectly. And only **IF** all computations return `True` do we persist a run in the db, otherwise it is discarded.
+existing data in Supabase. This keeps the flow coherently tied only to pandas/np mgmt and database data is always good. **NOTE** here that all computations return a bool `True` **IF and ONLY IF** the full computations complete perfectly. And only **IF** all computations return `True` do we persist a run in the db, otherwise it is discarded.
 
 Current computation pipeline (in order):
 ```python
@@ -122,6 +129,45 @@ fast_pg_insert(internal, "internal")
 ```
 
 - Why fail-first? Debugging messy data is a headache, so the general principle is no stupid ffils, default values etc. if we expect a value and it is not there then the run should fail 100%. 
+
+## Best Practices — Data & Storage
+
+Every run inserts ~40K rows across three tables and generates ~250MB of log files on disk. Treat storage as a constraint, not an afterthought.
+
+### Table purposes
+
+All subtables FK to `backtest_runs` via `backtest_id` with `ON DELETE CASCADE` — deleting a run automatically removes all its child rows.
+
+| Table | Purpose | What goes here |
+| :--- | :--- | :--- |
+| **`backtest_runs`** | Parent table. One row per run. | Status, algo name, round, total PnL, per-product PnL (`jsonb`), dev name. Everything links back here. |
+| **`prices`** | Everything the price chart needs. | Raw prices, volumes, order-book levels (bid/ask × 3 depth levels), mid price, PnL, **and all normalizers** (wallmid1, wallmid2, wallmidsma). If you add a new indicator/normalizer, it goes here as a new column. |
+| **`trades`** | Trade data and classification. | Individual fills with buyer/seller, price, quantity, and the computed classification labels (`buyer_class`, `seller_class`), plus running `algo_position`. |
+| **`internal`** | Data extracted from sandbox/lambda logs that cannot be obtained from the backtester output files. | Currently stores the **algo's own orders** (price + quantity per product per tick) because the backtester does not include placed orders in its output — only fills. Any future data that only exists inside the algo's runtime (signals, internal state snapshots) goes here via `[DATA]` logs. |
+
+### DB column types
+Use the smallest Postgres type that fits. The difference adds up fast at 40K rows/run:
+
+| Type | Size | Use for |
+| :--- | :--- | :--- |
+| `smallint` | 2 bytes | Volumes, quantities, day, order-book levels — anything that fits in ±32K |
+| `integer` | 4 bytes | Prices, timestamps |
+| `real` | 4 bytes | Computed floats (wallmid, PnL) — round to 2dp before insert |
+| `text` | variable | Only for backtest_id, product names, and similar identifiers |
+
+Don't default to `integer` or `bigint` for everything. If adding a new column, pick the narrowest type and always set a `DEFAULT` (or use an Alembic migration) so existing rows aren't nuked.
+
+### Algo: `json` not `jsonpickle`
+Use `json.dumps` / `json.loads` for `traderData`, never `jsonpickle`. jsonpickle adds type metadata (e.g. `{"py/object": ...}`) that bloats the payload — wastes the 50K char competition limit and produces bigger `lambdaLog` entries in the stream log. All current algos (v2–v4) already use plain `json`.
+
+### Log files on disk
+Log files in `backend/logs/` are **not auto-deleted**. Two files (~250MB combined) are created per run and stick around forever. Clean them up manually or they will eat your disk. The DB cleanup job only prunes Supabase rows — it does not touch local files.
+
+### General principles
+- **Fail-first, no silent defaults.** If a value is missing, raise — don't ffill/interpolate. Messy data is harder to debug than a failed run.
+- **Round floats before insert.** 2 decimal places for prices/indicators. Full float64 precision wastes storage and makes CSV exports ugly.
+- **Use indexes, not timestamps, for row operations.** Day -1 timestamps start at 1M which is just an offset — never rely on timestamp arithmetic for matching across dataframes.
+- **New normalizers/indicators → `prices` table.** New algo-internal runtime data → `internal` table via `[DATA]` logs. Don't mix these up.
 
 ## Dev - Frontend 
 Just look for yourself is pretty self explanatory, just one **MAJOR** point, if you look at the files you will see some logic in the "fetches" that looks kinda weird but is just conditionally stiching day-1 and day-2 data together. This also explains our general approach to the day mgmt:

@@ -40,7 +40,7 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
                 if line.startswith("B"): #backtesting log
                     day += 1
                 elif line.strip().startswith("{"):
-                    ied[(i, str(day))] = line.strip()
+                    ied[(i, day)] = line.strip()
                     i += 1
             
             internal = pd.DataFrame(columns=["timestamp", "product", "order_price", "order_quantity"])
@@ -123,19 +123,28 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
         internal.insert(0, "backtest_id", str(task_id))
 
         # Force ints (becomes floats because of NaNs)
-        cols_to_fix = [
-            'bid_price_1', 'bid_volume_1', 'bid_price_2', 'bid_volume_2', 'bid_price_3', 'bid_volume_3',
-            'ask_price_1', 'ask_volume_1', 'ask_price_2', 'ask_volume_2', 'ask_price_3', 'ask_volume_3'
-        ]
+        price_cols = ['bid_price_1', 'bid_price_2', 'bid_price_3',
+                      'ask_price_1', 'ask_price_2', 'ask_price_3']
+        volume_cols = ['bid_volume_1', 'bid_volume_2', 'bid_volume_3',
+                       'ask_volume_1', 'ask_volume_2', 'ask_volume_3']
 
-        for col in cols_to_fix:
+        for col in price_cols:
             if col in prices.columns:
                 prices[col] = prices[col].fillna(0).astype('int32')
+        for col in volume_cols:
+            if col in prices.columns:
+                prices[col] = prices[col].fillna(0).astype('int16')
 
-        # Trade price/quantity come in as floats from JSON — cast to int
-        for col in ['price', 'quantity']:
-            if col in trades.columns:
-                trades[col] = trades[col].fillna(0).astype('int32')
+        # Wallmid columns → float32 (DB is real / 4 bytes)
+        for col in ['wallmid1', 'wallmid2', 'wallmidsma']:
+            if col in prices.columns:
+                prices[col] = prices[col].astype('float32')
+
+        # Trade price stays int32, quantity → int16 (DB is smallint)
+        if 'price' in trades.columns:
+            trades['price'] = trades['price'].fillna(0).astype('int32')
+        if 'quantity' in trades.columns:
+            trades['quantity'] = trades['quantity'].fillna(0).astype('int16')
 
         fast_pg_insert(trades, "trades")
         fast_pg_insert(prices, "prices")

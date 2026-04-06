@@ -11,10 +11,10 @@ def parse_internal(raw_logs: dict, intdf: pd.DataFrame) -> bool:
             sandbox = json.loads(raw_sandboxlog)
             
             sandbox_day_keyed = {(day, key): value for key, value in sandbox.items()}
-            
+
             for (day, timestamp), data_list, in sandbox_day_keyed.items():
-                if day == str(-1):
-                            timestamp = int(timestamp) + 1000000 
+                if day == -1:
+                    timestamp = int(timestamp) + 1000000
                 for orders in data_list:
                     for order in orders:
                         if order[2] == 0:
