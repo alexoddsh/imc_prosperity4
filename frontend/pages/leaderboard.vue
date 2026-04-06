@@ -64,7 +64,11 @@
             @mousemove="(e) => moveTooltip(e)"
             @mouseleave="hideTooltip"
           >{{ run.algo_name }}</td>
-          <td style="padding: 4px 8px;"><p class="badge">{{ run.dev }}</p></td>
+          <td style="padding: 4px 8px;">
+            <span :style="getDevStyle(run.dev)">
+              {{ run.dev }}
+            </span>
+          </td>
           <td style="padding: 4px 8px;">{{ run.round_id }}</td>
           <td style="padding: 4px 8px; text-align: right;" :style="{ color: run.total_pnl >= 0 ? '#00aa44' : '#de0404' }">
             {{ fmt_pnl(run.total_pnl) }}
@@ -168,4 +172,24 @@ const fmt = (ts) => {
   const d = new Date(ts)
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
 }
+
+const devColors = {
+  'alex': { bg: '#62ff00', text: '#ffffff' },
+  'victor': { bg: '#eb13d5', text: '#ffffff' },
+  'default': { bg: '#ffffff', text: '#ffffff' },
+}
+
+const getDevStyle = (dev) => {
+  const colors = devColors[dev?.toLowerCase()] || devColors.default
+  return {
+    backgroundColor: colors.bg,
+    color: colors.text,
+    padding: '2px 8px',
+    borderRadius: '12px',
+    fontSize: '10px',
+    fontWeight: '600',
+    display: 'inline-block'
+  }
+}
+
 </script>
