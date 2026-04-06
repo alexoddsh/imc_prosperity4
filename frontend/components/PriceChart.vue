@@ -26,8 +26,8 @@ let cachedPriceRaw    = null
 let cachedTradeData   = null
 let cachedInternalData = null
 
-const SHORT = { MAKER1: 'M1', TAKER1: 'T1', INFORMED1: 'I1', TOXIC: 'TX', ALGO: 'AL' }
-const FG    = { MAKER1: '#fff', TAKER1: '#000', INFORMED1: '#fff', TOXIC: '#fff', ALGO: '#000' }
+const SHORT = { MAKER1: 'M1', TAKER1: 'T1', MAKER2: 'M2', TAKER2: 'T2', INFORMED1: 'I1', TOXIC: 'TX', ALGO: 'AL' }
+const FG    = { MAKER1: '#fff', TAKER1: '#000', MAKER2: '#fff', TAKER2: '#000', INFORMED1: '#fff', TOXIC: '#fff', ALGO: '#000' }
 
 function badgeHtml(cls) {
   const cfg = CAT_CFG[cls]
@@ -56,13 +56,15 @@ function hideTooltip() {
 // ── Marker style config ──────────────────────────────────────────────────────
 const CAT_CFG = {
   MAKER1:    { color: '#FF8C00', stroke: '#000', r: 11 },
+  MAKER2:    { color: '#b50000', stroke: '#000', r: 11 },
   TAKER1:    { color: '#00CC00', stroke: '#000', r: 8  },
+  TAKER2:    { color: '#00a500', stroke: '#000', r: 8  },
   INFORMED1: { color: '#6A3FE5', stroke: '#000', r: 8  },
   TOXIC:     { color: '#CC00CC', stroke: '#000', r: 8  },
   ALGO:      { color: '#FFD700', stroke: '#BB9000', r: 9 },
 }
 // Draw order: MAKER1 first = rendered behind everything else
-const DRAW_ORDER = ['MAKER1', 'TAKER1', 'INFORMED1', 'TOXIC', 'ALGO']
+const DRAW_ORDER = ['MAKER1', 'TAKER1', 'MAKER2', 'TAKER2', 'INFORMED1', 'TOXIC', 'ALGO']
 
 function drawShape(ctx, cls, x, y, pr) {
   const cfg = CAT_CFG[cls]
@@ -70,7 +72,7 @@ function drawShape(ctx, cls, x, y, pr) {
   const r = cfg.r * pr
   ctx.save()
 
-  if (cls === 'MAKER1') {
+  if (cls === 'MAKER1' || cls === 'MAKER2') {
     // Large square — drawn first, behind all others
     ctx.fillStyle   = cfg.color
     ctx.strokeStyle = cfg.stroke
@@ -78,7 +80,7 @@ function drawShape(ctx, cls, x, y, pr) {
     ctx.fillRect(x - r, y - r, r * 2, r * 2)
     ctx.strokeRect(x - r, y - r, r * 2, r * 2)
 
-  } else if (cls === 'TAKER1') {
+  } else if (cls === 'TAKER1' || cls === 'TAKER2') {
     // Filled triangle pointing up
     ctx.fillStyle   = cfg.color
     ctx.strokeStyle = cfg.stroke
@@ -363,6 +365,7 @@ const renderChart = (priceRaw, tradeData, internalData) => {
         mid_price:   d.mid_price   - ref,
         wallmid1:    d.wallmid1 != null ? d.wallmid1 - ref : null,
         wallmid2:    d.wallmid2 != null ? d.wallmid2 - ref : null,
+        wallmidsma:   d.wallmidsma != null ? d.wallmid2 - ref : null,
         _ref: ref,
       }
     }).filter(Boolean)
@@ -407,6 +410,10 @@ const renderChart = (priceRaw, tradeData, internalData) => {
   if (props.indicators.includes('WallMid2')) {
     series.Wall2 = chart.addSeries(lc.LineSeries, { ...lineOpts, color: '#00BFA5', lineWidth: 1.5 })
     series.Wall2.setData(prc.filter(d => valid(d.wallmid2)).map(d => ({ time: d.timestamp, value: d.wallmid2 })))
+  }
+  if (props.indicators.includes('WallMid2 (SMA)')) {
+    series.Wall2SMA = chart.addSeries(lc.LineSeries, { ...lineOpts, color: '#ff4297', lineWidth: 1.5 })
+    series.Wall2SMA.setData(prc.filter(d => valid(d.wallmidsma)).map(d => ({ time: d.timestamp, value: d.wallmidsma })))
   }
 
   if (props.normalize !== 'None' && series.Ask) {

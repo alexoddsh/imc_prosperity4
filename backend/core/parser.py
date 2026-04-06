@@ -89,7 +89,8 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
             print(f"  [WALLMID]: Wallmid Classes for {product}")
             success1 = normalizer.compute_wallmid1(product, prices)
             success2 = normalizer.compute_wallmid2(product, prices)
-            if not success1 or not success2:
+            success3 = normalizer.compute_wallmid_ma(product, prices)
+            if not success1 or not success2 or not success3:
                 raise Exception(f"  [WALLMID]: Pre compute failed {product}")
 
         #prev insert computations (trades)
@@ -104,13 +105,18 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
                 raise Exception(f"  [POSITION]: Pre compute failed {product}")
         
         #pnl handling
-        pnl = 0
+        final_pnl = 0
+        products_pnls = {}
         if system == SystemEnum.PROSPERITY4TBX:
             for product in products:
-                pnl += prices[(prices["timestamp"] == 999900) & (prices["product"] == product)]["profit_and_loss"].item() + prices[(prices["timestamp"] == 1999900) & (prices["product"] == product)]["profit_and_loss"].item()
+                pnl = prices[(prices["timestamp"] == 999900) & (prices["product"] == product)]["profit_and_loss"].item() + prices[(prices["timestamp"] == 1999900) & (prices["product"] == product)]["profit_and_loss"].item()
+                final_pnl += pnl
+                products_pnls.update({str(product): pnl})
         elif system == SystemEnum.PROSPERITY:
             for product in products:
-                pnl += prices[(prices["timestamp"] == 199900) & (prices["product"] == product)]["profit_and_loss"].item()
+                pnl = prices[(prices["timestamp"] == 199900) & (prices["product"] == product)]["profit_and_loss"].item()
+                products_pnls.update({str(product): pnl})
+                final_pnl += pnl
 
         prices.insert(0, "backtest_id", str(task_id))
         trades.insert(0, "backtest_id", str(task_id))
@@ -126,10 +132,15 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
             if col in prices.columns:
                 prices[col] = prices[col].fillna(0).astype('int32')
 
+        # Trade price/quantity come in as floats from JSON — cast to int
+        for col in ['price', 'quantity']:
+            if col in trades.columns:
+                trades[col] = trades[col].fillna(0).astype('int32')
+
         fast_pg_insert(trades, "trades")
         fast_pg_insert(prices, "prices")
         fast_pg_insert(internal, "internal")
-        update_backtest_status(str(task_id), "COMPLETED", pnl)
+        update_backtest_status(str(task_id), "COMPLETED", final_pnl, products_pnls)
         return 1
 
     except Exception as e:

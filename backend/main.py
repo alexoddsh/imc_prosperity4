@@ -1,9 +1,11 @@
 import uuid
 import os
+import asyncio
 import logging
 import json
 import subprocess
 import shutil
+from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime, timezone
 from core.models import LogFilter, SystemEnum, RunRequest
@@ -11,7 +13,8 @@ from fastapi import FastAPI, BackgroundTasks, HTTPException, UploadFile, Form, F
 from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from core.parser import process_results 
+from core.parser import process_results
+from cleanup import cleanup_loop, run_cleanup
 
 env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path)
@@ -23,7 +26,16 @@ supabase: Client = create_client(url, key)
 uvicorn_access_logger = logging.getLogger("uvicorn.access")
 uvicorn_access_logger.addFilter(LogFilter()) ## tell uvicorn to not stream INFO to stdcout
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    run_cleanup()  # run once on startup to clear any stale data
+    task = asyncio.create_task(cleanup_loop())
+    yield
+    task.cancel()
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -84,12 +96,12 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str):
                             for log_line in sandbox_log.splitlines():
                                 if log_line.strip() and not log_line.strip().startswith("[DATA]"):
                                     print(f"  [ALGO]: {log_line.strip()}")
-                         # ADD THIS:                                                                                                                        
+                                                                                                                   
                         lambda_log = data.get("lambdaLog", "")                    
                         if lambda_log.strip():                                                                                                             
                             for log_line in lambda_log.splitlines():
-                                if log_line.strip():                                                                                                       
-                                    print(f"  [ALGO]: {log_line.strip()}")
+                                if log_line.strip().startswith("  [ALGO]:"):                                                                                                       
+                                    print({log_line.strip()})
                     except json.JSONDecodeError:
                         pass 
                 else:

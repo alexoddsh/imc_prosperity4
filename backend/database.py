@@ -1,5 +1,6 @@
 import os
 import io
+import json
 import pandas as pd
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
@@ -27,9 +28,11 @@ def fast_pg_insert(df: pd.DataFrame, table_name: str):
     finally:
         raw_conn.close()
 
-def update_backtest_status(task_id, status, pnl=0.0):
+def update_backtest_status(task_id, status, pnl=0.0, product_pnls=None):
+    if product_pnls is None:
+        product_pnls = {}
     with engine.begin() as conn:
         conn.execute(
-            text("UPDATE backtest_runs SET status = :s, total_pnl = :p WHERE id = :id"),
-            {"s": status, "p": pnl, "id": task_id}
+            text("UPDATE backtest_runs SET status = :s, total_pnl = :p, products_pnl = :pnls WHERE id = :id"),
+            {"s": status, "p": pnl, "pnls": json.dumps(product_pnls), "id": task_id}
         )

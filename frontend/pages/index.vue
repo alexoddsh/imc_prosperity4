@@ -74,7 +74,7 @@
             {{ selectedInd.length ? selectedInd.join(', ') : '—' }}
           </div>
           <div v-if="indOpen" class="ind-options">
-            <label v-for="opt in ['Mid', 'WallMid1', 'WallMid2']" :key="opt">
+            <label v-for="opt in ['Mid', 'WallMid1', 'WallMid2', 'WallMid2 (SMA)']" :key="opt">
               <input type="checkbox" :value="opt" v-model="selectedInd"> {{ opt }}
             </label>
           </div>
@@ -105,7 +105,7 @@
         <span class="sl">normalize</span>
         <select v-model="normBy" class="raw-select">
           <option value="None">None</option>
-          <option v-for="opt in ['Mid', 'WallMid1', 'WallMid2']" :key="opt">{{ opt }}</option>
+          <option v-for="opt in ['Mid', 'WallMid1', 'WallMid2', 'WallMid2 (SMA)']" :key="opt">{{ opt }}</option>
         </select>
       </div>
 
@@ -180,7 +180,9 @@ const qtyRange = ref([1, 100])
 
 const categories = ref([
   { name: 'MAKER1',    bg: '#FF8C00', fg: '#fff', active: true },
+  { name: 'MAKER2',    bg: '#b50000', fg: '#fff', active: true },
   { name: 'TAKER1',    bg: '#00FF00', fg: '#000', active: true },
+  { name: 'TAKER2',    bg: '#00a500', fg: '#000', active: true },
   { name: 'INFORMED1', bg: '#6A3FE5', fg: '#fff', active: true },
   { name: 'TOXIC',     bg: '#ff03f7', fg: '#fff', active: true },
   { name: 'ALGO',      bg: '#FFD700', fg: '#000', active: true },
@@ -200,9 +202,9 @@ onMounted(loadRecentRuns)
 
 const fetchProducts = async (id) => {
   if (!id) return
-  const { data } = await supabase.from('prices').select('product').eq('backtest_id', id)
-  if (data) {
-    const unique = [...new Set(data.map(r => r.product))].filter(Boolean).sort()
+  const { data } = await supabase.from('backtest_runs').select('products_pnl').eq('id', id).single()
+  if (data?.products_pnl) {
+    const unique = Object.keys(data.products_pnl).filter(Boolean).sort()
     availableProducts.value = unique
     if (unique.length && !unique.includes(selectedProduct.value)) {
       selectedProduct.value = unique[0]
@@ -317,14 +319,9 @@ const formatRunLabel = (run) => {
   if (!raw) return '—';
 
   try {
-    const normalized = raw.replace('T', ' '); 
-    const parts = normalized.split(' '); 
-    
-    const dateParts = parts[0].split('-'); 
-    const day = dateParts[2] || '??';
-    
-    const timePart = parts[1] || '';
-    const hm = timePart.substring(0, 5) || '??:??';
+    const d = new Date(raw);
+    const day = String(d.getDate()).padStart(2, '0');
+    const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     
     const statusIcon = run.status === 'COMPLETED' ? '✓' : run.status === 'FAILED' ? '✗' : '…';
     const name = (run.algo_name || 'algo').replace('.py', '').substring(0, 8).padEnd(8);
