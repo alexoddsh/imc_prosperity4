@@ -53,6 +53,21 @@ function hideTooltip() {
   if (tooltipEl.value) tooltipEl.value.style.display = 'none'
 }
 
+function showAlgoObTooltip(pt, x, y) {
+  if (!tooltipEl.value) return
+  const dir = pt.qty > 0 ? 'LONG' : 'SHORT'
+  const color = pt.qty > 0 ? '#7c3e0e' : '#000000'
+  tooltipEl.value.innerHTML =
+    `<span style="color:${color};font-weight:700">${dir}</span> ${Math.abs(pt.qty)}@${pt.price}`
+  tooltipEl.value.style.display = 'block'
+  const rect = el.value.getBoundingClientRect()
+  const tw = tooltipEl.value.offsetWidth
+  let left = x + 10
+  if (left + tw > rect.width - 4) left = x - tw - 10
+  tooltipEl.value.style.left = left + 'px'
+  tooltipEl.value.style.top  = Math.max(2, y - 18) + 'px'
+}
+
 // ── Marker style config ──────────────────────────────────────────────────────
 const CAT_CFG = {
   MAKER1:    { color: '#FF8C00', stroke: '#000', r: 11 },
@@ -218,13 +233,13 @@ function makeAlgoObPrimitive() {
         draw(target) {
           if (!_pts.length) return
           target.useBitmapCoordinateSpace(({ context: ctx, horizontalPixelRatio: hr, verticalPixelRatio: vr }) => {
-            for (const { x, y } of _pts) {
+            for (const { x, y, qty } of _pts) {
               const cx = Math.round(x * hr)
               const cy = Math.round(y * vr)
               const r  = 7 * hr
               const inner = r * 0.42
               ctx.save()
-              ctx.fillStyle = '#000000'
+              ctx.fillStyle = qty > 0 ? '#7c3e0e' : '#000000'
               ctx.beginPath()
               for (let i = 0; i < 10; i++) {
                 const angle = (i * Math.PI / 5) - Math.PI / 2
@@ -256,12 +271,20 @@ function makeAlgoObPrimitive() {
         const x = ts.timeToCoordinate(o.time)
         const y = _series.priceToCoordinate(o.price)
         if (x == null || y == null) continue
-        _pts.push({ x, y })
+        _pts.push({ x, y, qty: o.qty, price: o.price })
       }
     },
     setData(orders) {
       _orders = orders
       _request?.()
+    },
+    findNearest(x, y, threshold = 14) {
+      let best = null, bestD = threshold
+      for (const pt of _pts) {
+        const d = Math.hypot(pt.x - x, pt.y - y)
+        if (d < bestD) { bestD = d; best = pt }
+      }
+      return best
     },
   }
 }
@@ -349,7 +372,7 @@ const renderChart = (priceRaw, tradeData, internalData) => {
 
   let prc = priceRaw
   if (props.normalize !== 'None') {
-    const NORM_KEY = { Mid: 'mid_price', WallMid1: 'wallmid1', WallMid2: 'wallmid2' }
+    const NORM_KEY = { Mid: 'mid_price', WallMid1: 'wallmid1', WallMid2: 'wallmid2', 'WallMid2 (SMA)': 'wallmidsma', WallMid3: 'wallmid3' }
     const refKey = NORM_KEY[props.normalize]
     prc = priceRaw.map(d => {
       const ref = d[refKey]
@@ -366,6 +389,7 @@ const renderChart = (priceRaw, tradeData, internalData) => {
         wallmid1:    d.wallmid1 != null ? d.wallmid1 - ref : null,
         wallmid2:    d.wallmid2 != null ? d.wallmid2 - ref : null,
         wallmidsma:   d.wallmidsma != null ? d.wallmid2 - ref : null,
+        wallmid3:     d.wallmid3 != null ? d.wallmid3 - ref: null,
         _ref: ref,
       }
     }).filter(Boolean)
@@ -414,6 +438,10 @@ const renderChart = (priceRaw, tradeData, internalData) => {
   if (props.indicators.includes('WallMid2 (SMA)')) {
     series.Wall2SMA = chart.addSeries(lc.LineSeries, { ...lineOpts, color: '#ff4297', lineWidth: 1.5 })
     series.Wall2SMA.setData(prc.filter(d => valid(d.wallmidsma)).map(d => ({ time: d.timestamp, value: d.wallmidsma })))
+  }
+  if (props.indicators.includes('WallMid3')) {
+    series.Wall3 = chart.addSeries(lc.LineSeries, { ...lineOpts, color: '#50ca54', lineWidth: 1.5 })
+    series.Wall3.setData(prc.filter(d => valid(d.wallmid3)).map(d => ({ time: d.timestamp, value: d.wallmid3 })))
   }
 
   if (props.normalize !== 'None' && series.Ask) {
@@ -474,6 +502,7 @@ const fetchData = async () => {
     .select('*')
     .eq('backtest_id', props.taskId)
     .eq('product', props.product)
+    .neq('order_quantity', 0)
 
   if (props.day !== 'all') {
     priceQuery    = priceQuery.eq('day', props.day)
@@ -564,10 +593,12 @@ onMounted(async () => {
       }
       return
     }
-    if (!primitive) return
     const rect = el.value.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
+    const algoPt = algoObPrim?.findNearest(x, y)
+    if (algoPt) { showAlgoObTooltip(algoPt, x, y); return }
+    if (!primitive) { hideTooltip(); return }
     const pt = primitive.findNearest(x, y)
     if (pt) showTooltip(pt, x, y)
     else    hideTooltip()

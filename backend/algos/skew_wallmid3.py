@@ -8,7 +8,7 @@ POSITION_LIMITS = {
 }
 
 #TECHNICALS
-MA_WINDOW = 20
+MA_WINDOW = 10
 MAX_HISTORY = 200
 
 class Logger:
@@ -41,7 +41,7 @@ class MarketTrader:
         self.best_ask_price, self.best_ask_volume = self.get_best_ask()
         self.buy_orders, self.sell_orders = self.get_order_depths()
 
-        self.wall_mid1, self.wall_mid2, self.wall_midma = self.compute_wallmid1(), self.compute_wallmid2(), self.compute_wallmidma()
+        self.wall_mid1, self.wall_mid2, self.wall_mid3, self.wall_midma = self.compute_wallmid1(), self.compute_wallmid2(), self.compute_wallmid3(), self.compute_wallmidma()
 
     def get_trader_data(self):
         trader_data = {}
@@ -58,11 +58,16 @@ class MarketTrader:
                 del trader_data[old_key]
         return trader_data
 
+    #note, here we protect against zero orders 
     def bid(self, bp, bv, orders):
-        orders.append(Order(self.product, bp, int(bv)))
+        if int(bv) == 0: 
+            return
+        orders.append(Order(self.product, bp, int(abs(bv))))
 
     def ask(self, sp, sv, orders):
-        orders.append(Order(self.product, sp, int(-sv)))
+        if int(sv) == 0: 
+            return
+        orders.append(Order(self.product, sp, int(-abs(sv))))
             
     def get_best_bid(self):
         bbp, bbv = next(iter(self.state.order_depths[self.product].buy_orders.items()))
@@ -70,7 +75,7 @@ class MarketTrader:
     
     def get_best_ask(self):
         bap, bav = next(iter(self.state.order_depths[self.product].sell_orders.items()))
-        return bap, bav
+        return bap, bav #note BAV is negative
     
     def get_order_depths(self):
         depth = self.state.order_depths[self.product]
@@ -83,7 +88,7 @@ class MarketTrader:
             asum, vol = 0, 0
             orders = getattr(self, attr)
             for prc, qty in orders.items():
-                asum += prc*abs(qty)
+                asum += prc*abs(qty) #sell quantities are negative
                 vol += abs(qty)
             vwaps.append(round((asum / vol), 2))
         wallmid = round((vwaps[0] + vwaps[1]) / 2, 2)
@@ -104,6 +109,12 @@ class MarketTrader:
         
         return wallmid
     
+    def compute_wallmid3(self):
+        buy_wall = min(prc for prc, _ in self.buy_orders.items())
+        sell_wall = max(prc for prc, _ in self.sell_orders.items())
+        wallmid = round((sell_wall + buy_wall) / 2, 2)
+        return wallmid
+    
     def compute_wallmidma(self):
         window_data = []
         reversed_items = list(self.trader_data.items())[::-1]
@@ -117,31 +128,31 @@ class MarketTrader:
         if len(window_data) == MA_WINDOW:
             sme = round(sum(window_data) / len(window_data), 2)
             return sme
-        
+
 class BasicMaker(MarketTrader):
     def __init__(self, product, state, logger):
         super().__init__(product, state, logger)
 
     def produce_orders(self):
         orders = []
-        if self.wall_midma is not None:
-            
+        if self.wall_mid3 is not None:
+
             ##TAKING ALL PROFITABLE
             for sp, sv in self.sell_orders.items():
-                if int(sp) < self.wall_midma:
+                if int(sp) < self.wall_mid3:
                     self.bid(sp, sv, orders)
             
             for bp, bv in self.buy_orders.items():
-                if int(bp) > self.wall_midma:
+                if int(bp) > self.wall_mid3:
                     self.ask(bp, bv, orders)
             
             ##MAKING MARKET
             skew_rate = self.current_position / self.position_limit
-            if int(self.best_ask_price - 1) > self.wall_midma:
+            if int(self.best_ask_price - 1) > self.wall_mid3:
                 vol_order = (self.position_limit - abs(self.current_position) / 2) * (1+skew_rate)
                 self.ask(self.best_ask_price-1, vol_order, orders)
             
-            if int(self.best_bid_price + 1) < self.wall_midma:
+            if int(self.best_bid_price + 1) < self.wall_mid3:
                 vol_order = (self.position_limit - abs(self.current_position) / 2) * (1-skew_rate)
                 self.bid(self.best_bid_price+1, vol_order, orders)
                 
@@ -150,29 +161,26 @@ class BasicMaker(MarketTrader):
 class Trader:
     def __init__(self):
         self.logger = Logger()
-    
+
     def run(self, state: TradingState):
         result = {}
-        outgoing = {}
         logs = []
 
         traders = {
             "TOMATOES": BasicMaker,
             "EMERALDS": BasicMaker
         }
-        for product, TraderClass in traders.items():
-            trader_instance = TraderClass(product, state, self.logger)
-            outgoing.update(trader_instance.trader_data)
+        for product, trader in traders.items():
+            trader_instance = trader(product, state, self.logger)
 
-            orders = trader_instance.produce_orders()        
+            orders = trader_instance.produce_orders()
             product_orders = orders[product]
             logs.append([[o.symbol, o.price, o.quantity] for o in product_orders]) #for internal visualization tool of missed orders
             result.update(orders)
             
         conversions = 0
+        traderData = ""
 
-        traderData = json.dumps(outgoing)
         self.logger.print(f"[DATA] {json.dumps({str(state.timestamp): logs})}")
         self.logger.flush(state, result, conversions, traderData)
-
         return result, conversions, traderData

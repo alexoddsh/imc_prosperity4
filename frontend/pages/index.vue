@@ -74,7 +74,7 @@
             {{ selectedInd.length ? selectedInd.join(', ') : '—' }}
           </div>
           <div v-if="indOpen" class="ind-options">
-            <label v-for="opt in ['Mid', 'WallMid1', 'WallMid2', 'WallMid2 (SMA)']" :key="opt">
+            <label v-for="opt in ['Mid', 'WallMid1', 'WallMid2', 'WallMid2 (SMA)', 'WallMid3']" :key="opt">
               <input type="checkbox" :value="opt" v-model="selectedInd"> {{ opt }}
             </label>
           </div>
@@ -105,7 +105,7 @@
         <span class="sl">normalize</span>
         <select v-model="normBy" class="raw-select">
           <option value="None">None</option>
-          <option v-for="opt in ['Mid', 'WallMid1', 'WallMid2', 'WallMid2 (SMA)']" :key="opt">{{ opt }}</option>
+          <option v-for="opt in ['Mid', 'WallMid1', 'WallMid2', 'WallMid2 (SMA)', 'WallMid3']" :key="opt">{{ opt }}</option>
         </select>
       </div>
 
@@ -155,10 +155,11 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 const config = useRuntimeConfig()
+const route = useRoute()
 const supabase = useSupabaseClient()
 const { fetchAll } = useFetchAll()
 
-const activeTaskId = ref('')
+const activeTaskId = ref(route.query.taskId || '')
 const isRunning = ref(false)
 const algoName = ref('version.py')
 const roundId = ref('0')
@@ -344,7 +345,7 @@ watch(activeTaskId, async (newId) => {
   if (!newId) return
   await fetchProducts(newId)
   fetchSummaryStats(newId)
-})
+}, { immediate: true })
 watch(selectedProduct, () => fetchSummaryStats(activeTaskId.value))
 watch(selectedDay, () => {fetchSummaryStats(activeTaskId.value)})
 </script>

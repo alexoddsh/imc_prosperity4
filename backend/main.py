@@ -151,6 +151,13 @@ async def root():
 async def run_backtest(req: RunRequest, background_tasks: BackgroundTasks):
     task_id = str(uuid.uuid4())
 
+    algo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "algos", req.algo_file)
+    try:
+        with open(algo_path, "r") as f:
+            algo_code = f.read()
+    except Exception:
+        algo_code = None
+
     try:
         supabase.table("backtest_runs").insert({
             "id": task_id,
@@ -158,7 +165,8 @@ async def run_backtest(req: RunRequest, background_tasks: BackgroundTasks):
             "round_id": req.round,
             "dev": dev_name,
             "status": "PENDING",
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "algo_code": algo_code
         }).execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")

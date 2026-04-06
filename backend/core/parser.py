@@ -89,8 +89,9 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
             print(f"  [WALLMID]: Wallmid Classes for {product}")
             success1 = normalizer.compute_wallmid1(product, prices)
             success2 = normalizer.compute_wallmid2(product, prices)
-            success3 = normalizer.compute_wallmid_ma(product, prices)
-            if not success1 or not success2 or not success3:
+            success3 = normalizer.compute_wallmid3(product, prices)
+            success4 = normalizer.compute_wallmid_ma(product, prices)
+            if not success1 or not success2 or not success3 or not success4:
                 raise Exception(f"  [WALLMID]: Pre compute failed {product}")
 
         #prev insert computations (trades)
@@ -122,7 +123,7 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
         trades.insert(0, "backtest_id", str(task_id))
         internal.insert(0, "backtest_id", str(task_id))
 
-        # Force ints (becomes floats because of NaNs)
+        # Force ints correct type casting
         price_cols = ['bid_price_1', 'bid_price_2', 'bid_price_3',
                       'ask_price_1', 'ask_price_2', 'ask_price_3']
         volume_cols = ['bid_volume_1', 'bid_volume_2', 'bid_volume_3',
@@ -135,12 +136,10 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
             if col in prices.columns:
                 prices[col] = prices[col].fillna(0).astype('int16')
 
-        # Wallmid columns → float32 (DB is real / 4 bytes)
         for col in ['wallmid1', 'wallmid2', 'wallmidsma']:
             if col in prices.columns:
                 prices[col] = prices[col].astype('float32')
 
-        # Trade price stays int32, quantity + algo_position → int16 (DB is smallint)
         if 'price' in trades.columns:
             trades['price'] = trades['price'].fillna(0).astype('int32')
         if 'quantity' in trades.columns:

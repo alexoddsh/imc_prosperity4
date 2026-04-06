@@ -66,6 +66,32 @@ def compute_wallmid2(product: str, pdf: pd.DataFrame) -> bool:
     except Exception as e:
         print(f"  [WALLMID2]: An error occured: {e}")
 
+def compute_wallmid3(product: str, pdf: pd.DataFrame) -> bool:
+    mask = pdf["product"] == product.upper()
+    
+    if not mask.any():
+        raise ValueError(f"  [WALLMID3]: No trades found in PDF for {product}")
+
+    try:
+        for i in pdf.index[mask]:
+            bid_prices = []
+            ask_prices = []
+            
+            for k in range(1, 4):
+                bid_prices.append(pdf.at[i, f"bid_price_{k}"])
+                ask_prices.append(pdf.at[i, f"ask_price_{k}"])
+
+            buy_wall = min(bid_prices)
+            sell_wall = max(ask_prices)
+
+            pdf.at[i, "wallmid3"] = round((sell_wall + buy_wall) / 2, 2)
+        
+        return True
+
+    except Exception as e:
+        print(f"  [WALLMID3]: An error occured: {e}")
+
+
 #v3
 def compute_wallmid_ma(product: str, pdf: pd.DataFrame) -> bool:
     mask = pdf["product"] == product.upper()

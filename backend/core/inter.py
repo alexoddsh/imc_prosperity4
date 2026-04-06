@@ -6,7 +6,11 @@ def parse_internal(raw_logs: dict, intdf: pd.DataFrame) -> bool:
 
     try:
         for (i, day), row in raw_logs.items():
-            entry = json.loads(row)
+            json_start = row.find('{"sandboxLog"')
+            if json_start == -1:
+                continue
+            json_line = row[json_start:].split('\n')[0]
+            entry = json.loads(json_line)
             raw_sandboxlog = entry["sandboxLog"].replace("[DATA] ", "")
             sandbox = json.loads(raw_sandboxlog)
             
