@@ -176,3 +176,5 @@ Just look for yourself is pretty self explanatory, just one **MAJOR** point, if 
 3. The frontend "stitches" together the PnL and Position data automatically if "All" is selected 
 
 **NOTE** Minor desing choice, NO data or similar loads in the frontend by default, the user must explicitly select all required options, this is in order to minimze unneccessary lag. For example we do not draw charts if props day, algo etc are not actrively set in the dropdown (no defaults).
+
+Also one final easter egg! the route /leaderboard contains a leaderboard for current round! 
