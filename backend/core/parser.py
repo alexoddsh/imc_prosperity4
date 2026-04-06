@@ -140,11 +140,13 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
             if col in prices.columns:
                 prices[col] = prices[col].astype('float32')
 
-        # Trade price stays int32, quantity → int16 (DB is smallint)
+        # Trade price stays int32, quantity + algo_position → int16 (DB is smallint)
         if 'price' in trades.columns:
             trades['price'] = trades['price'].fillna(0).astype('int32')
         if 'quantity' in trades.columns:
             trades['quantity'] = trades['quantity'].fillna(0).astype('int16')
+        if 'algo_position' in trades.columns:
+            trades['algo_position'] = trades['algo_position'].fillna(0).astype('int16')
 
         fast_pg_insert(trades, "trades")
         fast_pg_insert(prices, "prices")

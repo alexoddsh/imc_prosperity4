@@ -32,12 +32,12 @@ when we can both easily run it locally for ourselves. The only main thing to thi
 
 ### Two ways to get data in
 - **Run backtester** (`POST /run/`) — triggers the `prosperity4btx` binary with your algo file and a round ID. Results are streamed and auto-parsed.
-- **Upload official log** (`POST /upload-json`) — upload a `.log` file downloaded from the Prosperity website (JSON format). Skips the backtester entirely, parses directly into the DB. Useful for analyzing competition results.
+- **Upload official log** (`POST /upload-json`) — upload a `.log` file downloaded from the Prosperity website (JSON format). Skips the backtester entirely, parser runs directly for computations etc and then into the DB. Small note, frontend is not a fucking SaaS app, when you upload this process starts automatically directly, no "are you sure xx"
 
-**Adding columns in Supabase?** Rows accumulate QUICKLY so generally two main points. A) delete data from scrap runs B) use alembic migs or default values in code when adding columns as to not nuke any previous runs.
+**Adding columns in Supabase?** Rows accumulate QUICKLY so generally two main points. A) delete data from scrap runs B) (should be done auto see below) use alembic migs or default values in code when adding columns as to not nuke any previous runs.
 
 ### Automatic cleanup job (`backend/cleanup.py`)
-Runs once on startup and then every 30 minutes in the background. It deletes from `backtest_runs` — child rows in `trades`, `prices`, and `internal` are removed automatically via `ON DELETE CASCADE`. Tunables are constants at the top of the file.
+Runs once on startup and then every 30 minutes in the background. It deletes from `backtest_runs` — child rows in `trades`, `prices`, and `internal` are removed automatically via `ON DELETE CASCADE`. Tunables for this are constants at the top of the file.
 
 | Rule | What gets deleted |
 | :--- | :--- |
@@ -52,14 +52,14 @@ Runs once on startup and then every 30 minutes in the background. It deletes fro
   - **`{task_id}.log`** — written by the prosperity4btx binary itself (via `--out`). Contains the structured Activities log (prices CSV) and Trade History (trades JSON) that the parser reads.
   - **`{task_id}_stream.log`** — written by `main.py` by capturing every line of stdout from the subprocess. Contains the raw JSON lines printed by `logger.flush()` each tick (each with `sandboxLog` and `lambdaLog`), plus non-JSON status lines emitted by the backtester. This is what `inter.py` reads for internal data.
 
-The Logger class (defined in each algo file — not `datamodel.py`) accumulates prints in memory and flushes a single JSON line to stdout at the end of each `run()` call. `main.py` picks that up and decides what to show in the terminal vs. write silently to the stream log. So to summarize the main idea is:
+The Logger class (defined in each algo file — not `datamodel.py` since it is our own version and therefore is not defined by prosperity) accumulates prints in memory and flushes a single JSON line to stdout at the end of each `run()` call. `main.py` picks that up and decides what to show in the terminal vs. write silently to the stream log. So to summarize the main idea is:
 
 | Channel | Destination | Purpose | Format | Best Practice |
 | :--- | :--- | :--- | :--- | :--- |
-| **`self.logger.print()`** | `{task_id}_stream.log` + terminal | **Humans.** Real-time debugging and terminal milestones. | Plain Text / String | **Cannot coexist with `[DATA]` on the same tick** (see below). Only use on ticks where you are NOT logging `[DATA]`. |
+| **`self.logger.print()`** | `{task_id}_stream.log` + terminal | **Humans.** Real-time debugging and terminal milestones. | Plain Text / String | **Cannot coexist with `[DATA]` on the same tick** (see below). Only use on ticks where you are NOT logging `[DATA]`. To be clear this is essentially useless currently, IF you want debug prints use a normal print (see below) if you want prints that persist in the logs use the DATA version below. |
 | **`self.logger.print("[DATA] ...")`** | `{task_id}_stream.log` only (silent) | **Post-run parsing.** Store structured data (orders, signals) per timestamp for offline analysis. | `[DATA] ` prefix + JSON string | **Use this every tick.** The `[DATA]` prefix is filtered from terminal output by `main.py` but is written to the stream log. **CRITICAL: this must be the ONLY `self.logger.print()` call on any tick where it runs.** `inter.py` parses internal data by stripping `[DATA] ` from the entire `sandboxLog` and calling `json.loads()` — mixing in any other print on the same tick corrupts the JSON and crashes the parser. |
 | **`traderData`** | Internal State / `lambdaLog` | **The Machine.** Persistent memory to pass variables to the next round. | JSON | **50k char limit in competition.** Only store what the bot needs to remember between ticks. Do NOT use this for logging. |
-| **`print()`** | raw stdout / terminal | **Terminal only, not in stream log.** Raw Python `print()` does appear in the terminal (via the backtester's `--print` flag), but is **not** written to `{task_id}_stream.log` and cannot be post-parsed. | — | Avoid in algo code. Use `self.logger.print()` so output is captured in the stream log. |
+| **`print()`** | raw stdout / terminal | **Terminal only, not in stream log.** Raw Python `print()` does appear in the terminal (via the backtester's `--print` flag), but is **not** written to `{task_id}_stream.log` and cannot be post-parsed. | — |  Use to print debug etc as normal, careful not to crash terminal... |
 
 When writing your `run` method, follow this sequence to ensure the backtester captures everything correctly:
 
@@ -158,15 +158,15 @@ Use the smallest Postgres type that fits. The difference adds up fast at 40K row
 Don't default to `integer` or `bigint` for everything. If adding a new column, pick the narrowest type and always set a `DEFAULT` (or use an Alembic migration) so existing rows aren't nuked.
 
 ### Algo: `json` not `jsonpickle`
-Use `json.dumps` / `json.loads` for `traderData`, never `jsonpickle`. jsonpickle adds type metadata (e.g. `{"py/object": ...}`) that bloats the payload — wastes the 50K char competition limit and produces bigger `lambdaLog` entries in the stream log. All current algos (v2–v4) already use plain `json`.
+IMC wiki tells use to use jsonpickle, piece of advice do NOT do that. Use `json.dumps` / `json.loads` for `traderData`, never `jsonpickle`. jsonpickle adds type metadata (e.g. `{"py/object": ...}`) that bloats the payload — wastes the 50K char competition limit and produces bigger `lambdaLog` entries in the stream log. 
 
 ### Log files on disk
-Log files in `backend/logs/` are **not auto-deleted**. Two files (~250MB combined) are created per run and stick around forever. Clean them up manually or they will eat your disk. The DB cleanup job only prunes Supabase rows — it does not touch local files.
+Log files in `backend/logs/` are **not auto-deleted**. Two files (~250MB combined) are created per run and stick around forever. Clean them up manually or nuke your PC. The DB cleanup job only prunes Supabase rows — it does not touch local files since that seemed to wake stuff even worse. 
 
 ### General principles
-- **Fail-first, no silent defaults.** If a value is missing, raise — don't ffill/interpolate. Messy data is harder to debug than a failed run.
-- **Round floats before insert.** 2 decimal places for prices/indicators. Full float64 precision wastes storage and makes CSV exports ugly.
-- **Use indexes, not timestamps, for row operations.** Day -1 timestamps start at 1M which is just an offset — never rely on timestamp arithmetic for matching across dataframes.
+- **Fail-first, no silent defaults.** If a value is missing, raise — don't ffill/default to 0 etc. Messy data is harder to debug than a failed run.
+- **Round floats before insert.** 2 decimal places for prices/indicators. Full float64 precision wastes storage and makes CSV exports ugly. Only float4 used. 
+- **Use indexes, not timestamps, for row operations.** Day -1 timestamps start at 1M which is just an offset — never rely on timestamp arithmetic for matching across dataframes. See current files whom all operate via the mask strat, aka creating an index mask that allows to operate via the index labels on the dfs via view not copy view.  
 - **New normalizers/indicators → `prices` table.** New algo-internal runtime data → `internal` table via `[DATA]` logs. Don't mix these up.
 
 ## Dev - Frontend 

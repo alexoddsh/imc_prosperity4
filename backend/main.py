@@ -102,7 +102,7 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str):
                         if lambda_log.strip():                                                                                                             
                             for log_line in lambda_log.splitlines():
                                 if log_line.strip().startswith("  [ALGO]:"):                                                                                                       
-                                    print({log_line.strip()})
+                                    print(log_line.strip())
                     except json.JSONDecodeError:
                         pass 
                 else:
