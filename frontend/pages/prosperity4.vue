@@ -194,6 +194,7 @@ const activeCategories = computed(() => categories.value.filter(c => c.active).m
 const loadRecentRuns = async () => {
   const { data } = await supabase.from('backtest_runs')
     .select('id, algo_name, round_id, status, total_pnl, created_at')
+    .eq('year', '4')
     .order('created_at', { ascending: false })
     .limit(20)
   if (data) recentRuns.value = data
@@ -218,7 +219,7 @@ const runBacktest = async () => {
   try {
     const res = await $fetch(`${config.public.apiBase}/run/`, {
       method: 'POST',
-      body: { algo_file: algoName.value, round: roundId.value }
+      body: { algo_file: algoName.value, round: roundId.value, year: "4"}
     })
     activeTaskId.value = res.task_id
     pollStatus(res.task_id)

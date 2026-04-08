@@ -1,8 +1,7 @@
 import pandas as pd
+import numpy as np
 
 ##note simple file for now but we could use to calculate more complex position logic later
-#for now just computes going position but maybe could implement more complex "skew" testing for backtest to for
-#example see how would position have changed if we did X Y Z
 
 def compute_position(product: str, tdf: pd.DataFrame) -> bool:
     mask = tdf["symbol"] == product.upper()
@@ -32,11 +31,43 @@ def compute_position(product: str, tdf: pd.DataFrame) -> bool:
                 k += 1
                         
         return True
-
+    
     except Exception as e:
         print(f"--[POSITION]-- An error occured: {e}")
 
-            
+      
+def compute_poition(product: str, tdf: pd.DataFrame) -> bool:
+    mask = tdf["symbol"] == product.upper()
+
+    if not mask.any():
+        raise ValueError(f"  [POSITION]: No data in PDF for {product}")
+
+    tdf.loc[mask, "algo_position"] = 0
+
+    try:
+        idx = tdf[mask].index
+        buyer = tdf.loc[idx, "buyer"]
+        seller = tdf.loc[idx, "seller"]
+        vols = tdf.iloc[idx, "quantity"]
+
+
+        delta = np.where(buyer == "SUBMISSION", vols,
+                np.where(seller == "SUBMISSION", -vols, 0))
+        
+        days = tdf.loc[idx, "day"] #pd series with all days in the idx for a certain product
+        tdf.loc[idx, "algo_position"] = (
+            pd.Series(delta, index=idx)
+            .groupby(days)
+            .cumsum()
+        )
+                        
+        return True
+    
+    except Exception as e:
+        print(f"--[POSITION]-- An error occured: {e}")
+
+
+    
 
 
     

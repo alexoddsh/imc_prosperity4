@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 def compute_wallmid1(product: str, pdf: pd.DataFrame) -> bool:
     mask = pdf["product"] == product.upper()
@@ -7,28 +8,22 @@ def compute_wallmid1(product: str, pdf: pd.DataFrame) -> bool:
         raise ValueError(f" [WALLMID1]: No trades found in PDF for {product}")
 
     try:
-        for i in pdf.index[mask]:
-            vwaps = {}
-            for t in ["bid", "ask"]:
-                vsum = 0.0
-                vol = 0.0
+        df = pdf.loc[mask]
+        vwaps = {}
+        for t in ["bid", "ask"]:
+            prices = np.stack([df[f"{t}_price_{k}"].to_numpy() for k in range(1, 4)], axis=1)
+            vols = np.stack([df[f"{t}_volume_{k}"].to_numpy() for k in range(1, 4)], axis=1)
 
-                for k in range(1, 4):
-                    if pd.isna(pdf.at[i, f"{t}_price_{k}"] * pdf.at[i, f"{t}_volume_{k}"]):
-                        break
-                    
-                    vsum += pdf.at[i, f"{t}_price_{k}"] * pdf.at[i, f"{t}_volume_{k}"]
-                    vol += pdf.at[i, f"{t}_volume_{k}"]
-                    
-                if vsum !=0 and vol !=0:
-                    vwaps[f"vwap_{t}"] = vsum / vol 
-                else:
-                    raise ValueError(f"  [WALLMID1]: Wallmid could not be computed for{product}")
-        
-            pdf.at[i, "wallmid1"] = round(((vwaps["vwap_ask"] + vwaps["vwap_bid"]) / 2), 2) 
+            price_vol = prices * vols 
+            sums = np.nansum(price_vol, axis=1)
+            volumes = np.nansum(vols, axis=1)
+            vwaps[t] = sums / volumes 
             
+        vwap = np.round((vwaps["ask"] + vwaps["bid"]) / 2, 2)
+        pdf.loc[mask, "wallmid1"] = pd.Series(vwap, index=df.index)
+
         return True
-        
+
     except Exception as e:
         print(f"  [WALLMID1]: An error occured: {e}")    
 
@@ -39,28 +34,19 @@ def compute_wallmid2(product: str, pdf: pd.DataFrame) -> bool:
         raise ValueError(f"  [WALLMID2]: No trades found in PDF for {product}")
 
     try:
-        for i in pdf.index[mask]:
-            bid_vols = []
-            ask_vols = []
+        df = pdf.loc[mask]
+        max_prices = {}
+        for t in ["bid", "ask"]:
+            prices = np.stack([df[f"{t}_price_{k}"].to_numpy() for k in range(1, 4)], axis=1)
+            vols = np.stack([df[f"{t}_volume_{k}"].to_numpy() for k in range(1, 4)], axis=1)
             
-            #note that .index returning only one value if there are multiple levels 
-            #with the same liquidity actually isnt a problem because if there are multiple lvls 
-            #we want the level with the lowest price to signal WALL lvl 
-            for k in range(1, 4):
-                bid_vols.append(pdf.at[i, f"bid_volume_{k}"])
-                ask_vols.append(pdf.at[i, f"ask_volume_{k}"])
+            volmax_idx = np.nanargmax(vols, axis=1) 
+            volmax_prices = prices[np.arange(len(volmax_idx)), volmax_idx]
+            max_prices[t] = volmax_prices
             
-            bid_lvl_qty = max(bid_vols)
-            ask_lvl_qty = max(ask_vols)
+        wallmid = np.round((max_prices["ask"] + max_prices["bid"]) / 2, 2) 
+        pdf.loc[mask, "wallmid2"] = pd.Series(wallmid, index=df.index)
 
-            bid_lvl_idx = bid_vols.index(bid_lvl_qty)
-            ask_lvl_idx = ask_vols.index(ask_lvl_qty)
-
-            bid_lvl_price = pdf.at[i, f"bid_price_{bid_lvl_idx+1}"]
-            ask_lvl_price = pdf.at[i, f"ask_price_{ask_lvl_idx+1}"]
-            
-            pdf.at[i, "wallmid2"] = round(((ask_lvl_price + bid_lvl_price) / 2), 2)
-        
         return True
     
     except Exception as e:
@@ -73,18 +59,19 @@ def compute_wallmid3(product: str, pdf: pd.DataFrame) -> bool:
         raise ValueError(f"  [WALLMID3]: No trades found in PDF for {product}")
 
     try:
-        for i in pdf.index[mask]:
-            bid_prices = []
-            ask_prices = []
-            
-            for k in range(1, 4):
-                bid_prices.append(pdf.at[i, f"bid_price_{k}"])
-                ask_prices.append(pdf.at[i, f"ask_price_{k}"])
+        df = pdf.loc[mask]
+        ob_prices = {}
+        for t in ["bid", "ask"]:
+            prices = np.stack([df[f"{t}_price_{k}"].to_numpy() for k in range(1, 4)], axis=1) 
+            if t == "bid":
+                low_bid = np.nanmin(prices, axis=1) #collapse cols to get on element per row
+                ob_prices[t] = low_bid
+            elif t == "ask":
+                max_ask = np.nanmax(prices, axis=1)
+                ob_prices[t] = max_ask
 
-            buy_wall = min(bid_prices)
-            sell_wall = max(ask_prices)
-
-            pdf.at[i, "wallmid3"] = round((sell_wall + buy_wall) / 2, 2)
+        wallmid = np.round((ob_prices["ask"] + ob_prices["bid"]) / 2, 2)
+        pdf.loc[mask, "wallmid3"] = pd.Series(wallmid, index=df.index)
         
         return True
 

@@ -41,7 +41,9 @@ class MarketTrader:
         self.best_ask_price, self.best_ask_volume = self.get_best_ask()
         self.buy_orders, self.sell_orders = self.get_order_depths()
 
-        self.wall_mid1, self.wall_mid2, self.wall_mid3, self.wall_midma = self.compute_wallmid1(), self.compute_wallmid2(), self.compute_wallmid3(), self.compute_wallmidma()
+        self.wall_mid1, self.wall_mid2, self.wall_midma = self.compute_wallmid1(), self.compute_wallmid2(), self.compute_wallmidma()
+        self.wall_mid3, self.buy_wall, self.sell_wall = self.compute_wallmid3()
+        self.p_micro_simple, self.p_micro_wall = self.compute_micro()
 
     def get_trader_data(self):
         trader_data = {}
@@ -113,7 +115,7 @@ class MarketTrader:
         buy_wall = min(prc for prc, _ in self.buy_orders.items())
         sell_wall = max(prc for prc, _ in self.sell_orders.items())
         wallmid = round((sell_wall + buy_wall) / 2, 2)
-        return wallmid
+        return wallmid, buy_wall, sell_wall
     
     def compute_wallmidma(self):
         window_data = []
@@ -128,116 +130,68 @@ class MarketTrader:
         if len(window_data) == MA_WINDOW:
             sme = round(sum(window_data) / len(window_data), 2)
             return sme
+
+    def compute_micro(self):
+        p_micro_simple = round(((self.best_bid_price * abs(self.best_ask_volume)) + (self.best_ask_price*self.best_bid_volume)) / (self.best_bid_volume+abs(self.best_ask_volume)), 2)
         
+        buy_wall_vol = self.buy_orders[self.buy_wall]
+        sell_wall_vol = self.sell_orders[self.sell_wall]
+        p_micro_wall = round(((self.buy_wall * abs(sell_wall_vol)) + (self.sell_wall * buy_wall_vol)) / (abs(sell_wall_vol) + buy_wall_vol), 2)
+        
+        return p_micro_simple, p_micro_wall
+
 class BasicMaker(MarketTrader):
     def __init__(self, product, state, logger):
         super().__init__(product, state, logger)
 
     def produce_orders(self):
         orders = []
-        
-        if self.wall_midma is not None:
-            indicator = self.wall_midma
-        else:
-            indicator = self.wall_mid3
-
-        #EMERALS = constant true price no just max bid no inventory risk, therefore just maximize
-        #orders without hitting limit
-        if self.product == "EMERALDS":
-            
-            ##TAKING ALL PROFITABLE
-            allowed_long = POSITION_LIMITS.get(self.product) - self.current_position
-            allowed_short = POSITION_LIMITS.get(self.product) + self.current_position
-
-            for sp, sv in self.sell_orders.items():
-                if int(sp) < indicator and allowed_long > 0: 
-                    bid_vol = min(abs(sv), allowed_long)
-                    allowed_long -= bid_vol
-                    self.bid(sp, bid_vol, orders)
-            
-            for bp, bv in self.buy_orders.items():
-                if int(bp) > indicator and allowed_short > 0:
-                    ask_vol = min(bv, allowed_short)
-                    allowed_short -= ask_vol
-                    self.ask(bp, ask_vol, orders)
-            
-            ##MAKING MARKET
-            if int(self.best_bid_price + 1) < indicator and allowed_long > 0:
-                bid_vol = min(allowed_long, 15)
-                self.bid(self.best_bid_price+1, bid_vol, orders)
-
-            if int(self.best_ask_price - 1) > indicator and allowed_short > 0:
-                ask_vol = min(allowed_short, 15)
-                self.ask(self.best_ask_price-1, ask_vol, orders)
-                        
-        #TOMATOES SKEW BASED LOGIC, DONT SKEW VOLUME SKEW PRICE
-                    
-        if self.product == "TOMATOES":
-            allowed_long = POSITION_LIMITS.get(self.product) - self.current_position
-            allowed_short = POSITION_LIMITS.get(self.product) + self.current_position #80 + -20 = 60 short osv
+        if self.p_micro_wall is not None:
 
             ##TAKING ALL PROFITABLE
             for sp, sv in self.sell_orders.items():
-                if sp < indicator:
-                    allowed_long -= abs(sv)
+                if int(sp) < self.p_micro_wall:
                     self.bid(sp, sv, orders)
             
             for bp, bv in self.buy_orders.items():
-                if bp > indicator:
-                    allowed_short -= abs(bv)
+                if int(bp) > self.p_micro_wall:
                     self.ask(bp, bv, orders)
-
-            #pos -> price effect simple asf because bots dont respond to tighter spread
-            def calc_bid_price(allowed_short) -> int:
-                if allowed_short < 40:
-                    bid_price = indicator #zero edge 
-                else:
-                    bid_price = self.best_bid_price + 1 
-                return int(bid_price)
-
-            def calc_ask_price(allowed_long) -> int:
-                if allowed_long < 40:
-                    ask_price = indicator
-                else: 
-                    ask_price = self.best_ask_price - 1
-                return int(ask_price)
-
-            if int(self.best_bid_price + 1) < indicator:
-                bid_price = calc_bid_price(allowed_short)
-                self.bid(bid_price, allowed_long, orders)
             
-            if int(self.best_ask_price - 1) > indicator:
-                ask_price = calc_ask_price(allowed_long)
-                self.ask(ask_price, allowed_short, orders)
-        
+            ##MAKING MARKET
+            skew_rate = self.current_position / self.position_limit
+            if int(self.best_ask_price - 1) > self.p_micro_wall:
+                vol_order = (self.position_limit - abs(self.current_position) / 2) * (1+skew_rate)
+                self.ask(self.best_ask_price-1, vol_order, orders)
+            
+            if int(self.best_bid_price + 1) < self.p_micro_wall:
+                vol_order = (self.position_limit - abs(self.current_position) / 2) * (1-skew_rate)
+                self.bid(self.best_bid_price+1, vol_order, orders)
+                
         return {self.product: orders}
            
 class Trader:
     def __init__(self):
         self.logger = Logger()
-    
+
     def run(self, state: TradingState):
         result = {}
-        outgoing = {}
         logs = []
 
         traders = {
             "TOMATOES": BasicMaker,
             "EMERALDS": BasicMaker
         }
-        for product, TraderClass in traders.items():
-            trader_instance = TraderClass(product, state, self.logger)
-            outgoing.update(trader_instance.trader_data)
+        for product, trader in traders.items():
+            trader_instance = trader(product, state, self.logger)
 
-            orders = trader_instance.produce_orders()        
+            orders = trader_instance.produce_orders()
             product_orders = orders[product]
             logs.append([[o.symbol, o.price, o.quantity] for o in product_orders]) #for internal visualization tool of missed orders
             result.update(orders)
             
         conversions = 0
+        traderData = ""
 
-        traderData = json.dumps(outgoing)
         self.logger.print(f"[DATA] {json.dumps({str(state.timestamp): logs})}")
         self.logger.flush(state, result, conversions, traderData)
-
         return result, conversions, traderData

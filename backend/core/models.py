@@ -10,6 +10,7 @@ class SystemEnum(Enum):
     PROSPERITY = 1
     PROSPERITY4TBX = 2
 
-class RunRequest(BaseModel):
+class RunRequest(BaseModel): 
     algo_file: str
     round: str
+    year: str

@@ -15,6 +15,9 @@ prosperity4btx = "*"
 supabase = "*"
 multipart = "*"
 python-multipart = "*"
+matplotlib = "*"
+scikit-learn = "*"
+prosperity3bt = "*"
 
 [requires]
 python_version = "3"

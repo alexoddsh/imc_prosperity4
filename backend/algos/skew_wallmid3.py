@@ -165,22 +165,25 @@ class Trader:
     def run(self, state: TradingState):
         result = {}
         logs = []
+        outgoing = {}
 
         traders = {
             "TOMATOES": BasicMaker,
             "EMERALDS": BasicMaker
         }
-        for product, trader in traders.items():
-            trader_instance = trader(product, state, self.logger)
+        for product, TraderClass in traders.items():
+            trader_instance = TraderClass(product, state, self.logger)
+            outgoing.update(trader_instance.trader_data)
 
-            orders = trader_instance.produce_orders()
+            orders = trader_instance.produce_orders()        
             product_orders = orders[product]
             logs.append([[o.symbol, o.price, o.quantity] for o in product_orders]) #for internal visualization tool of missed orders
             result.update(orders)
             
         conversions = 0
-        traderData = ""
 
+        traderData = json.dumps(outgoing)
         self.logger.print(f"[DATA] {json.dumps({str(state.timestamp): logs})}")
         self.logger.flush(state, result, conversions, traderData)
+
         return result, conversions, traderData

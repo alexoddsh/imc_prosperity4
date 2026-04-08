@@ -1,8 +1,9 @@
-from io import StringIO
 import pandas as pd
 import io
 import re
 import json
+from io import StringIO
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from core.models import SystemEnum
 from database import fast_pg_insert, update_backtest_status
@@ -146,10 +147,12 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
             trades['quantity'] = trades['quantity'].fillna(0).astype('int16')
         if 'algo_position' in trades.columns:
             trades['algo_position'] = trades['algo_position'].fillna(0).astype('int16')
-
-        fast_pg_insert(trades, "trades")
-        fast_pg_insert(prices, "prices")
-        fast_pg_insert(internal, "internal")
+        
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            executor.submit(fast_pg_insert, prices, "prices")
+            executor.submit(fast_pg_insert, trades, "trades")
+            executor.submit(fast_pg_insert, internal, "internal")
+        
         update_backtest_status(str(task_id), "COMPLETED", final_pnl, products_pnls)
         return 1
 

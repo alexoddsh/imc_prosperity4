@@ -48,7 +48,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def execute_backtest(task_id: str, algo_file: str, round_id: str):
+def execute_backtest(task_id: str, algo_file: str, round_id: str, year: str):
     try:
         base_path = os.path.dirname(os.path.abspath(__file__))
         algo_path = os.path.join(base_path, "algos", algo_file)
@@ -57,7 +57,11 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str):
         log_path = os.path.join(log_dir, f"{task_id}.log")
 
         algo_dir = os.path.dirname(algo_path) 
-        binary_exec = os.environ.get("PROSPERITY4BTX_PATH")
+        if year == str(4):
+            binary_exec = os.environ.get("PROSPERITY4BTX_PATH")
+        elif year == str(3):
+            binary_exec = os.environ.get("PROSPERITY3_PATH")
+
         env = os.environ.copy()
         env["PYTHONPATH"] = f"{algo_dir}:{env.get('PYTHONPATH', '')}"
 
@@ -166,12 +170,13 @@ async def run_backtest(req: RunRequest, background_tasks: BackgroundTasks):
             "dev": dev_name,
             "status": "PENDING",
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "algo_code": algo_code
+            "algo_code": algo_code,
+            "year": req.year
         }).execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
 
-    background_tasks.add_task(execute_backtest, task_id, req.algo_file, req.round)
+    background_tasks.add_task(execute_backtest, task_id, req.algo_file, req.round, req.year)
 
     return {"task_id": task_id, "status": "Started"}
 
@@ -194,9 +199,9 @@ async def proccess_json(file: UploadFile = File(...), algo_file: str = Form(...)
             "round_id": round,
             "dev": dev_name,
             "status": "PENDING",
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "year": "4"
         }).execute()
-        
         
         print("  [UPLOAD]: Attempting to parse log file")        
         if process_results(task_id, file_path, None, SystemEnum.PROSPERITY) == 0:
