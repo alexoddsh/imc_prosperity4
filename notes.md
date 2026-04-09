@@ -47,7 +47,7 @@ Manual:
 
 ### **Round 2**
 Orchids: <br>
-Premise being that these were produced on a different island, whereby they could be imported/exported subject to tariff and shipping costs. Also data that was hinted at being related, such as sunlightIndex and humidiy, but like other years, it was hard to find any meaningful pattern and the data was likely there as a distraction. <br>
+Premise being that these were produced on a different island, whereby they could be imported/exported subject to tariff and shipping costs. Also data that was hinted at being related, such as sunlightIndex and humidiy, but like other years, it was hard to find any meaningful pattern and the data was likely there as a distraction. <br><br>
 The key insight was rather in the market microstructure itself, with there existing a large taker that would consume sell orders close to the best bid. Combined with low implied ask prices in the foreign market, this lead to a simple arbitrage opportunity of selling locally and buying foreign.
 > We tested out different prices for sell orders in the local market, and found that using a price of foreign ask price - 2 worked best. However, with this fixed level for our sell orders, we worried about changes in the market preventing this level from being consistently filled. As such, we came up with an "adaptive edge" algorithm, which looked at how much volume we got at each iteration (with the maximum, nominal volume being 100 lots). If the average volume we received was below some threshold, we'd start moving our sell order level around, automatically searching for a new level to maximize profits.
 
@@ -68,7 +68,7 @@ From Cove Capital - So, we figured that even if it wasn't the main strategy, we 
 - What price level should we buy/sell at?
 - Should we perfectly hedge gift baskets with it's components?
 - How do we actually calculate the mean gift basket price (rolling mean, set mean)?
-<br>
+<br><br>
 Manual: <br>
 You get to go on a maximum of three expeditions to search for treasure. Your first expedition is free, but the second and third one will come at a cost. You’ll have to split the spoils with all the others that search in the same spot. Every spot has its treasure multiplier (up to 100) and the number of hunters (up to 8). The spot's total treasure is the product of the base treasure (7500, same for all spots) and the spot's specific treasure multiplier. However, the resulting amount is then divided by the sum of the hunters and the percentage of all the expeditions (from other players) that took place there. For example, if a field has 5 hunters, and 10% of all the expeditions (from other players) are also going there, the prize you get from that field will be divided by 15. After the division, expedition costs apply (if there are any), and profit is what remains.
 
