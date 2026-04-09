@@ -59,7 +59,7 @@ You get the chance to do a series of trades in some foreign island currencies. T
 
 ### **Round 3** <br>
 Gift baskets (chocolates, roses, strawberries): <br>
-really just the same ETF stat arb idea as other years. They first looked for leading/lagging relationships between the basked and the synthetic, but did not have that much success. The key idea was that the basket-synthetic spread oscillated around ~370, allowing a mean-reverting strategy involving buying the basked and selling the synthetic when spread was below average and vice versa when above average. <br>
+really just the same ETF stat arb idea as other years. They first looked for leading/lagging relationships between the basked and the synthetic, but did not have that much success. The key idea was that the basket-synthetic spread oscillated around ~370, allowing a mean-reverting strategy involving buying the basked and selling the synthetic when spread was below average and vice versa when above average. <br><br>
 The key problem became optimizing when to enter a trade based on the spread, since position limits and liquidity made it unattractive to simply just buy/sell when the spread crossed its average. First they simply backtested to optmisize hard-coded thresholds for when the deviation was attractive.
 >  A more adaptive algorithm for spreads. We traded on a modified z-score, using a hardcoded mean and a rolling window standard deviation, with the window set relatively small. The idea behind this was that there should be a fundamental reason behind the mean of spread (think the price of the basket itself), but the volatility each day would be less predictable. Then, we thresholded the z-score, selling spreads when our z-score went above a certain value and buying when the z-score dropped below. By using a small window for our rolling standard deviation, we'd see our z-score spike when the standard deviation drastically dropped–and this would often happen right as the price started reverting, allowing us to trade closer to local minima/maxima.
 
@@ -68,7 +68,7 @@ From Cove Capital - So, we figured that even if it wasn't the main strategy, we 
 - What price level should we buy/sell at?
 - Should we perfectly hedge gift baskets with it's components?
 - How do we actually calculate the mean gift basket price (rolling mean, set mean)?
-
+<br>
 Manual: <br>
 You get to go on a maximum of three expeditions to search for treasure. Your first expedition is free, but the second and third one will come at a cost. You’ll have to split the spoils with all the others that search in the same spot. Every spot has its treasure multiplier (up to 100) and the number of hunters (up to 8). The spot's total treasure is the product of the base treasure (7500, same for all spots) and the spot's specific treasure multiplier. However, the resulting amount is then divided by the sum of the hunters and the percentage of all the expeditions (from other players) that took place there. For example, if a field has 5 hunters, and 10% of all the expeditions (from other players) are also going there, the prize you get from that field will be divided by 15. After the division, expedition costs apply (if there are any), and profit is what remains.
 
