@@ -130,10 +130,10 @@ To conclude, the Frankfurt team kept a simple algo for resin, simply taking any 
 Kelp: <br>
 For taking they simply took max liquidity for all directly profitable trades, and they also flattened at 0 edge whenever possible. If the book was only 1 CU away from fair, they simply placed themselves top of book. Tried optimising edge similarly to rainforest problem but then decided to keep it simple.
 - interestingly, "Olivia" exhibited the same informed trader pattern for kelp as she did for squid ink, however due to the lower variance of kelp, impact did not find it very profitable to try and incorporate this into their strategy.
-<br>
+
 The Frankfurt team didn't find the informed trader pattern for Kelp, and employed basically exactly the same strategy for Kelp as they did for Resin, simply quoting around their "wallMid" indicator (which was just the mean of the worst ask and bid - which basically functioned like liquidity walls imposed by some informed market maker - teams had very slightly different ways of estimating this fair value but they all achieve basically the same result).
 
-<br>
+<br><br>
 Squid Ink: <br>
 More volatile and a tighter spread.
 > the most obvious of which occurred on 2 out of the 3 days of data given to us, where the price exhibited a massive price spike before immediately reverting to its previous level. One of these spikes gapped down over 100 seashells before reverting, presenting an opportunity to profit over 10k seashells in only 2 timestamps.We initially implemented a strategy to capture this opportunity by tracking the price in the previous timestamp and comparing it with the current price (current price - previous price). If the difference was < -50 (an arbitrary number that we set) we would clear the offer, and if it was > +50 we would clear the bid on the orderbook.
