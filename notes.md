@@ -109,7 +109,7 @@ You’ve been invited to trade on the exchange of the north archipelago for one 
 
 ***
 ## Prosperity 3
-###**General ideas from 'What's the impact'** <br>
+### **General ideas from 'What's the impact'** <br>
 - backing out fair value estimation by trading one lot
 - We found that there were serious flow imbalances in multiple products, typically with the aggressor persistently selling throughout the session. We hoped to find some directional information encoded in these flow imbalances, however, there was no sign that the signed volume had any impact on the price of the asset. This was something that confused (and frustrated) us massively throughout the rounds, until in Round 5 details of counterparties were released and we were able to fit a narrative to these trading patterns. We found that two parties were simply trading with each other, one of which was market making and the other was either consistently buying or selling from them. For example Pablo consistently sold options regardless of the price to Camilla, who was market making and profiting consistently from him crossing the spread (He was consistently selling the 10500 strike options to her for 0 seashells !).
 - test the common ideas, find the signals, validate, then optimize execution (making or taking, different size and edge requirements could give big boosts in PnL)
@@ -124,20 +124,20 @@ The Frankfurt team does not have a lot to add in this regard, but they do use ra
 - thus throughout the competition, speed and order cancellation remained irrelevant
 - however, as a heurestic prediction, it could be worth considering whether an innovation to prosperity for this year could be modelling time in a more complex manner, such that the market's state does not "freeze" in time while waiting for your actions, which would increase complexity significantly and also put emphasis on other mechanisms, but this is just a prediction
 - on this topic, another potential innovation could be the implementation of more order types, in all editions of the competition so far, one could describe the orders as being limit orders that only live for one timestamp, but they could implement limit orders that remain on the book, or market order, fill and kill etc.
-<br>
+
 To conclude, the Frankfurt team kept a simple algo for resin, simply taking any immediately profitable trades, and then quoting 1 tick away from the highest level in the book. If inventory became too skewed, they flattened it at fair value (10000).
-<br>
+<br><br>
 Kelp: <br>
 For taking they simply took max liquidity for all directly profitable trades, and they also flattened at 0 edge whenever possible. If the book was only 1 CU away from fair, they simply placed themselves top of book. Tried optimising edge similarly to rainforest problem but then decided to keep it simple.
 - interestingly, "Olivia" exhibited the same informed trader pattern for kelp as she did for squid ink, however due to the lower variance of kelp, impact did not find it very profitable to try and incorporate this into their strategy.
 <br>
 The Frankfurt team didn't find the informed trader pattern for Kelp, and employed basically exactly the same strategy for Kelp as they did for Resin, simply quoting around their "wallMid" indicator (which was just the mean of the worst ask and bid - which basically functioned like liquidity walls imposed by some informed market maker - teams had very slightly different ways of estimating this fair value but they all achieve basically the same result).
 
-<br>
+<br><br>
 Squid Ink: <br>
 More volatile and a tighter spread.
 > the most obvious of which occurred on 2 out of the 3 days of data given to us, where the price exhibited a massive price spike before immediately reverting to its previous level. One of these spikes gapped down over 100 seashells before reverting, presenting an opportunity to profit over 10k seashells in only 2 timestamps.We initially implemented a strategy to capture this opportunity by tracking the price in the previous timestamp and comparing it with the current price (current price - previous price). If the difference was < -50 (an arbitrary number that we set) we would clear the offer, and if it was > +50 we would clear the bid on the orderbook.
-
+<br>
 Then towards the end of the round, a hint was dropped that ink was mean-reverting. "What's the impact" used Bollinger Bands to trade this, and grid-searched for the optimal params, but found no params that were profitable across all 3 days of training data, and the risk of overfitting was large. They ended up using very conservative standard deviation conditions, entering when the moving average crossed +/- 3 deviations, and liquidiating when it went back 1 deviation. It is unclear how profitable this was for them; leaderboards show that they finished good (around 120th place) in the first round, but this was far away from the Frankfurt team who found the informed trader pattern already in round 1.
 
 Impact recognized the informed trader pattern when trader IDs were released in the last round, which they discuss as:
@@ -151,7 +151,7 @@ Now Squid Ink is one of the products where the teams actually differed in their 
 Picnic Baskets (Croissants, Jams, Djembes): <br>
 Impact don't talk about their ETF stat-arb explicitly but likely followed similar strategies to others. <br>
 Interestingly, my interpretation of the baskets across prosperity editions is that have never been directly convertable to the underlying, and that an update from Prosperity 2 and onward was having 2 baskets rather than just 1. This leaves some room to theorise that maybe even more baskets are implemented, or maybe an institutional market-making agreement type of situation could be implemented that gives participants the ability to directly convert basket shares to the underlying.
-<br>
+<br><br>
 The Frankfurt team discuss both trading the spread between the two baskets adjusted for Djembes (basket 1 had 6 croissants, 4 Jams, and 1 Djembe while basket 2 had 4 croissants and 2 jams) and trading the spread between the etf and its synthetic value (sum of the constituents). One nice remark from the Frankfurt team is their theory that the constituent's prices were independently randomized, and the basket data was then generated by adding a mean-reverting noise sequence on top of the constituent prices - this is somewhat important as it means that the basket has mean-reversion to its synthetic value rather than the synthetic having mean-reversion to the baskets. They mention the possibility of heding in the constituents, but that this actually reduced EV, especially considering the cost of trading (spread). <br>
 
 A more general insight they have is that prosperity is mostly about first principles:
@@ -167,7 +167,7 @@ Lastly they discuss how they altered their strategy for the final round to be a 
 ### **Round 3**
 Volcanic Rock and Volcanic Rock Vouchers: <br>
 Unlike prosperity 2 where the call option (coconut coupon) was only offered at one strike, the Volcanic Rock Vouchers were offered at 5 strikes ranging from 9500 to 10500. Also, unlike the coconut coupons which had a very long time until expiration, the vouchers only had 5 days until expiration, with each remaining round of the competition representing a trading day. For Impact, trading these products was by far the most lucrative opportunity of the competition, but they also spent the most time on them. <br>
-First, they explored options trading outside their arbitrage bounds, and found that the 9500 strike (deep in the money) sometimes traded at its intrinsic value (implying zero time value). So the initial idea was kind of to trade theta by trying to buy at these timestamps and then offload when they believed theta to be positive. The problem however was that due to time-price priority, they almost never got filled buying for parity. <br>
+First, they explored options trading outside their arbitrage bounds, and found that the 9500 strike (deep in the money) sometimes traded at its intrinsic value (implying zero time value). So the initial idea was kind of to trade theta by trying to buy at these timestamps and then offload when they believed theta to be positive. The problem however was that due to time-price priority, they almost never got filled buying for parity. <br><br>
 They then turned to analysing the orderbook flow, theorising that large options trades would front-run moves in the underlying, and although there were numerous instances when options would be sold simultaneously at all strikes, they could not find any signal in this. When trader IDs were revealed in round 5, it became apparent (according to them at least), that orderbook flow was benign.
 <br>
 Then a hint was released to plot the IV against moneyness, whereby Impact calculated the IV with the Newton-Rhapson method and then plotting IV using a window length of the last 50 timestamps, which they settled on through grid search. Then they simply fitted a second-order polynomial to the IV-smile and traded when volatility was mispriced. <br>
@@ -206,7 +206,6 @@ About other market observations: <br>
 As with similar goods in earlier prosperity editions, macarons came with associated data such as a sunlight index and a sugar index. The hint was that these could be used to look for directional signals, however, as with earlier editions, these were somewhat of a red-herring - with the much more profitable strategy focusing on market microstructure rather than fundamental analysis. A hint about a critical sunlight index was released by admins when round 4 was coming to a close. The hint stated that if the sunlight index goes below this CSI with an anticipation to remain under this critical level for a long period of time, macaron prices can increase by a substantial amount. But since there was a cost associated with holding macarons (0.1 shells per timestamp per macaron), so even if you timed it perfectly, the edge in this strategy was not that big. However, this fact was not completely useless:
 > In spite of the opportunity only being a small one, we didn’t want to miss out on edge in instances where ‘shipping’ was low and we couldn’t perform the locational arb. We therefore included logic in our script that went long macarons if the slope of the sunlight index was below a certain threshold and if the sunlight index itself was below some threshold (CSI). This logic was only executed in instances where we couldn’t perform the locational arb.
 <br>
-<br>
 Depending a bit on the interpretation, it seems like the Frankfurt team found a very similar pattern to exploit. They remarked that just nominal locational arbitrage was not profitable. But rather, they found that there existed a taker in the local market that would consistently fill at int(externalBid + 0.5). In essence, they found that while the book levels that first came in during the start of every timestamp made straightforward arbitrage unprofitable, they could quote local asks that were close to the local bid, but still above the external ask adjusted for fees, enabling arbitrage. <br>
 Notably, they like other top teams did not focus on the other market data like sunlightIndex etc., finding that the predictive power, while maybe there, was weak, and that arbitrage was a far more convincing strategy.
 
@@ -214,7 +213,7 @@ Notably, they like other top teams did not focus on the other market data like s
 The last round again released traderIDs. There were 11 traders, each focusing on their own subset of instruments. Impact analysed the traders by PnL, split by product and decomposed into execution and holding components. There were traders that generated good PnL by consistently trading at favourable prices - however this offered limited insight into improving algorithms since these behaviours were often already exploited, for example Impact were already market-making aggressively in several products. "Olivia" was identified as the lone trader with significant holding PnL - trading exclusively at the daily extremas for Kelp, Squid Ink, and Croissants. This held limited insight for kelp (due to its stable price dynamics), but was layered into Impact's mean-reversion strategy for Squid Ink, with the only modification being required in terms of the mean-reversion part being to shorten the liquidation horizon for mean-reverting trades whenever a directional trade was available. <br>
 
 For Croissants, the informed trader pattern also held insight, and offered several alternatives. One could profitably trade Croissants directly or scale croissant exposure through trading baskets. Impact decided to kind of combine them and continue with their stat arb strategy, but introduced a croissant-based term into the basket's target position, with the weight of this term being decided through basic backtesting.
-<br>
+<br><br>
 Lastly it is worth nothing that Impact had a much more maths heavy idea for trading Croissants, which relied on using the revealed daily extremas to trade on the resulting relative assymetries in the randow walk from those points. While they talk about how they would have started on the implementation, their write-up never finishes that section, and how profitable it could be is not explicitly discussed, but is is definitely an interesting idea to keep in mind.
 <br><br>
 The Frankfurt team did not mention anything about round 5 more than the fact that they continuously re-optimized all relevant parameters across rounds.
