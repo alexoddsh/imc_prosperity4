@@ -18,7 +18,7 @@ let ser         = null
 let storedData  = []
 
 const fetchData = async () => {
-  if (!lc || !chart || !props.taskId || !props.product || !props.day) return
+  if (!lc || !chart || !props.taskId || !props.product || props.day === '') return
   
   let query = supabase.from('prices')
     .select('timestamp, profit_and_loss, day')
@@ -114,7 +114,7 @@ onMounted(async () => {
     broadcastHover(lookup, param.time ?? null)
   })
 
-  if (props.taskId && props.product && props.day) await fetchData()
+  if (props.taskId && props.product && props.day !== '') await fetchData()
 })
 
 onUnmounted(() => { chart?.remove(); chart = null; lc = null })

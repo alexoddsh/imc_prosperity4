@@ -486,7 +486,7 @@ const renderChart = (priceRaw, tradeData, internalData) => {
 }
 
 const fetchData = async () => {
-  if (!lc || !chart || !props.taskId || !props.product || !props.day) return
+  if (!lc || !chart || !props.taskId || !props.product || props.day === '') return
 
   let priceQuery = supabase.from('prices')
     .select('*')

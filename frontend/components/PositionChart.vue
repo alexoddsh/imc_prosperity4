@@ -18,7 +18,7 @@ let ser        = null
 let storedData = []
 
 const fetchData = async () => {
-  if (!lc || !chart || !props.taskId || !props.product || !props.day) return
+  if (!lc || !chart || !props.taskId || !props.product || props.day === '') return
 
   let priceQ = supabase.from('prices')
     .select('timestamp, day') 

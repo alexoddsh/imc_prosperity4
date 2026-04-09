@@ -64,6 +64,7 @@
           <option value="all">All</option>
           <option :value="-2">Day -2</option>
           <option :value="-1">Day -1</option>
+          <option :value="0">Day 0</option>
         </select>
       </div>
 

@@ -6,7 +6,7 @@ from datamodel import TradingState, Order
 POSITION_LIMITS = {
     "RAINFOREST_RESIN": 50,
     "KELP": 50,
-    "SQUID_INK": 80
+    "SQUID_INK": 50
 }
 
 #TECHNICALS
@@ -15,27 +15,10 @@ MA_WINDOW = 10
 #SYMBOLS
 Product = Literal["RAINFOREST_RESIN", "KELP", "SQUID_INK"]
 
-class Logger:
-    def __init__(self) -> None:
-        self.logs = ""
-
-    def print(self, *objects: any, sep: str = " ", end: str = "\n") -> None:
-        self.logs += sep.join(map(str, objects)) + end
-
-    def flush(self, state, orders, conversions, traderData):
-        print(json.dumps({
-            "sandboxLog": self.logs,
-            "lambdaLog": traderData,
-            "timestamp": state.timestamp,
-        }, separators=(",", ":")))
-        self.logs = ""
-
-
 class MarketTrader:
-    def __init__(self, product, state, logger):
+    def __init__(self, product, state):
         self.product = product 
         self.state = state 
-        self.logger = logger
         self.incoming_trader_data = self.get_trader_data()
         
         self.position_limit = POSITION_LIMITS.get(self.product.upper(), 0)
@@ -44,26 +27,32 @@ class MarketTrader:
         self.best_bid_price, self.best_bid_volume = self.get_best_bid()
         self.best_ask_price, self.best_ask_volume = self.get_best_ask()
         self.buy_orders, self.sell_orders = self.get_order_depths()
-        self.running_dhp, self.running_dhv, self.running_dlp, self.running_dlv = self.check_informed()
+        
+        self.dh_bid, self.dh_bid_vol, self.dl_ask, self.dl_ask_vol = self.informed_data()
+        self.entered_trades = self.algo_history()
 
         self.wall_mid1 = self.compute_wallmid1()
         self.wall_mid2, self.td_key_wallmid = self.compute_wallmid2()
         self.wall_mid3 = self.compute_wallmid3()
         
         self.outgoing_trader_data = self.get_outgoing_trader_data()
-        self.wall_midma = self.compute_wallmidma() #needs outgoing TD for computation
+        self.wall_midma = self.compute_wallmidma() 
 
     def get_trader_data(self) -> dict[str, dict]:
         if not self.state.traderData:
             return {
-                "INFORMED_DATA": {"dh": [0, 0], "dl": [999999, 0]},
+                "INFORMED_DATA": {
+                    "prev_dl_ask": [0, 0], 
+                    "prev_dh_bid": [0, 0],
+                },
+                "ENTERED_TRADES": {
+                  "sell": [],
+                  "buy": []  
+                },
                 "WALLMID_DATA": {}
             }
         
-        return json.loads(self.state.traderData).get(self.product, {
-            "INFORMED_DATA": {"dh": [0, 0], "dl": [999999, 0]},
-            "WALLMID_DATA": {}
-        })
+        return json.loads(self.state.traderData).get(self.product)
                     
     def get_outgoing_trader_data(self) -> dict[str, dict]:
         assert self.incoming_trader_data, f"No trader data for: {self.product}"
@@ -71,9 +60,10 @@ class MarketTrader:
         
         outgoing_trader_data = {
             "INFORMED_DATA": {
-                "dh": (self.running_dhp, self.running_dhv),
-                "dl": (self.running_dlp, self.running_dlv)
+                "prev_dl_ask": (self.dl_ask, self.dl_ask_vol),
+                "prev_dh_bid": (self.dh_bid, self.dh_bid_vol),
             },
+            "ENTERED_TRADES": self.entered_trades,
             "WALLMID_DATA": self.incoming_trader_data["WALLMID_DATA"]
         }
         
@@ -82,35 +72,52 @@ class MarketTrader:
             del outgoing_trader_data["WALLMID_DATA"][old_key]
 
         return outgoing_trader_data
-        
-    def check_informed(self) -> tuple[int, int, int, int]:
-        prev_dhp, prev_dhv = self.incoming_trader_data["INFORMED_DATA"].get("dh")
-        prev_dlp, prev_dlv = self.incoming_trader_data["INFORMED_DATA"].get("dl")
+    
+    #very important mention! technically speaking we can save literally every trade we do
+    #BUT if running an trade heavy strat this will get 1000s of items long, this is still 
+    #more than fast enough to clear the 900 ms / run limit but dreadfully slow for sims
 
-        trades = self.state.market_trades.get(self.product, [])
-        if not trades:
-            return prev_dhp, prev_dhv, prev_dlp, prev_dlv 
-
+    def algo_history(self) -> dict[str, dict[str, list[int, int]]]:
+        time = self.state.timestamp
+        if time == 0:
+            entered_trades = {}
+            entered_trades["sell"] = [{time : [0,0]}]
+            entered_trades["buy"] = [{time : [0,0]}]
         else:
-            _list = {}
-            _list[prev_dhp] = prev_dhv
-            _list[prev_dlp] = prev_dlv
-            
-            for trade in trades:
-                _list[trade.price] = trade.quantity
-            
-            dh_price = max(max(prc for prc in _list.keys()), prev_dhp)
-            dl_price = min(min(prc for prc in _list.keys()), prev_dlp)
+            entered_trades = self.incoming_trader_data["ENTERED_TRADES"]
+            if self.product in self.state.own_trades.keys():
+                new_trades = self.state.own_trades[self.product]
+                for trade in new_trades:
+                    if trade.seller == "SUBMISSION":    
+                        entered_trades["sell"].append({time: [trade.quantity, trade.price]})  
+                    elif trade.buyer == "SUBMISSION":
+                        entered_trades["buy"].append({time: [trade.quantity, trade.price]})
+        
+        if len(entered_trades["sell"]) > 20:
+            del entered_trades["sell"][0]
+        
+        if len(entered_trades["buy"]) > 20:
+            del entered_trades["buy"][0]
 
-            if dh_price == 999999:
-                dh_price, dh_vol = trade.price, trade.quantity
-                dl_price, dl_vol = trade.price, trade.quantity
+        return entered_trades
+
+    def informed_data(self) -> tuple[int, int, int, int]:
+        ask, askv = self.get_best_ask()
+        bid, bidv = self.get_best_bid()
+        
+        if self.state.timestamp == 0:
+            prev_dl_ask, prev_dl_ask_vol = ask, askv
+            prev_dh_bid, prev_dh_bid_vol = bid, bidv
             
-            else:
-                dh_vol = _list[dh_price]
-                dl_vol = _list[dl_price]
-            
-            return dh_price, dh_vol, dl_price, dl_vol
+        else:
+            prev_dl_ask, prev_dl_ask_vol = self.incoming_trader_data["INFORMED_DATA"]["prev_dl_ask"]
+            prev_dh_bid, prev_dh_bid_vol = self.incoming_trader_data["INFORMED_DATA"]["prev_dh_bid"]
+            if ask < prev_dl_ask:
+                prev_dl_ask, prev_dl_ask_vol = ask, askv
+            if bid > prev_dh_bid:
+                prev_dh_bid, prev_dh_bid_vol = bid, bidv
+
+        return prev_dh_bid, prev_dh_bid_vol, prev_dl_ask, prev_dl_ask_vol
 
     def bid(self, bp, bv, orders) -> None:
         if int(bv) == 0: 
@@ -186,14 +193,39 @@ class MarketTrader:
 
 
 class InformedTaker(MarketTrader):
-    def __init__(self, product, state, logger):
-        super().__init__(product, state, logger)
+    def __init__(self, product, state):
+        super().__init__(product, state)
 
+    def produce_orders(self) -> dict[Product, Order]:
+        orders = []
+        sus_vol = 15
+        tolerance = 1
+
+        prev_dl_ask, prev_dl_ask_vol = self.incoming_trader_data["INFORMED_DATA"]["prev_dl_ask"]
+        prev_dh_bid, prev_dh_bid_vol = self.incoming_trader_data["INFORMED_DATA"]["prev_dh_bid"]
+
+        #take at dh/dl -> note a small specific entered_trades can have multiple trades for each timestamp
+        #but when running this strat specifically we know that it wont
+        if self.product in self.state.market_trades.keys():
+            for trade in self.state.market_trades[self.product]:
+                if trade.quantity == sus_vol:
+                    if trade.price - tolerance <= prev_dl_ask: 
+                        self.bid(self.best_ask_price, 20, orders)
+                        if self.entered_trades["buy"] and (faulty_trade_time := list(self.entered_trades["buy"][-1].keys())[0]):     
+                            sv, sq = self.entered_trades["buy"][-1][faulty_trade_time] 
+                            self.ask(sv, sq, orders)
+
+                    elif trade.price + tolerance >= prev_dh_bid:
+                        self.ask(self.best_bid_price, 20, orders)
+                        if self.entered_trades["sell"] and (faulty_trade_time := list(self.entered_trades["sell"][-1].keys())[0]):     
+                            bv, bq = self.entered_trades["sell"][-1][faulty_trade_time] 
+                            self.bid(bv, bq, orders)
         
+        return {self.product: orders}            
 
 class BasicMaker(MarketTrader):
-    def __init__(self, product, state, logger):
-        super().__init__(product, state, logger)
+    def __init__(self, product, state):
+        super().__init__(product, state)
 
     def produce_orders(self) -> dict[Product, Order]:
         orders = []
@@ -252,8 +284,6 @@ class BasicMaker(MarketTrader):
         return {self.product: orders}
            
 class Trader:
-    def __init__(self):
-        self.logger = Logger()
 
     def run(self, state: TradingState):
         result = {}
@@ -263,10 +293,10 @@ class Trader:
         traders = {
             "RAINFOREST_RESIN": BasicMaker,
             "KELP": BasicMaker,
-            "SQUID_INK": BasicMaker
+            "SQUID_INK": InformedTaker
         }
         for product, TraderClass in traders.items():
-            trader_instance = TraderClass(product, state, self.logger)
+            trader_instance = TraderClass(product, state)
             outgoing[product] = trader_instance.outgoing_trader_data
 
             orders = trader_instance.produce_orders()        
@@ -277,7 +307,6 @@ class Trader:
         conversions = 0
 
         traderData = json.dumps(outgoing)
-        self.logger.print(f"[DATA] {json.dumps({str(state.timestamp): logs})}")
-        self.logger.flush(state, result, conversions, traderData)
+        print(f"[DATA] {json.dumps({str(state.timestamp): logs})}")
 
         return result, conversions, traderData

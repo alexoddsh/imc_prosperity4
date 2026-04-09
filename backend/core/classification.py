@@ -22,8 +22,8 @@ def compute_classes(product: str, pdf: pd.DataFrame, tdf: pd.DataFrame) -> bool 
             above_mid = day_tdf["price"] >= day_tdf["mid_price"]
             below_mid = day_tdf["price"] < day_tdf["mid_price"]
 
-            near_high = abs(day_tdf["price"] - daily_max) / daily_max < 0.01 
-            near_low = abs(day_tdf["price"] - daily_low) / daily_low < 0.01
+            near_high = abs(day_tdf["price"] - daily_max) / daily_max < 0.001
+            near_low = abs(day_tdf["price"] - daily_low) / daily_low < 0.001
             large_vol = day_tdf["quantity"] >= 10
             algo_buy = day_tdf["buyer"] == "SUBMISSION"
             algo_sell = day_tdf["seller"] == "SUBMISSION" 

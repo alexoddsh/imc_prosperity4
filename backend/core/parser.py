@@ -148,7 +148,11 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
         if 'algo_position' in trades.columns:
             trades['algo_position'] = trades['algo_position'].fillna(0).astype('int16')
         
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        
+        TRADE_COLS = ['backtest_id', 'timestamp', 'symbol', 'price', 'quantity', 'buyer', 'seller', 'buyer_class', 'seller_class', 'algo_position', 'day']
+        trades = trades[[c for c in TRADE_COLS if c in trades.columns]]
+
+        with ThreadPoolExecutor() as executor:
             executor.submit(fast_pg_insert, prices, "prices")
             executor.submit(fast_pg_insert, trades, "trades")
             executor.submit(fast_pg_insert, internal, "internal")

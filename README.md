@@ -27,7 +27,7 @@ when we can both easily run it locally for ourselves. The only main thing to thi
 
 1. `main.py`
 2. `core/parser.py` (first half)
-3. `Logger.flush()` output format (the JSON shape that `main.py` and `inter.py` depend on)
+3. The `[DATA]` print format (the JSON shape that `inter.py` depends on)
 4. existing frontend implementation
 
 ### Two ways to get data in
@@ -50,55 +50,49 @@ Runs once on startup and then every 30 minutes in the background. It deletes fro
 ## Dev - Simulation and Logs 
 - `main.py` -> runs the prosperity4btx backtester executable against the specified algo file in */backend/algos*. Two log files are produced per run, both written into */backend/logs/*:
   - **`{task_id}.log`** — written by the prosperity4btx binary itself (via `--out`). Contains the structured Activities log (prices CSV) and Trade History (trades JSON) that the parser reads.
-  - **`{task_id}_stream.log`** — written by `main.py` by capturing every line of stdout from the subprocess. Contains the raw JSON lines printed by `logger.flush()` each tick (each with `sandboxLog` and `lambdaLog`), plus non-JSON status lines emitted by the backtester. This is what `inter.py` reads for internal data.
+  - **`{task_id}_stream.log`** — written by `main.py` by capturing every line of stdout from the subprocess. Contains the raw JSON lines emitted by the binary each tick, plus non-JSON status lines. This is what `inter.py` reads for internal data.
 
-The Logger class (defined in each algo file — not `datamodel.py` since it is our own version and therefore is not defined by prosperity) accumulates prints in memory and flushes a single JSON line to stdout at the end of each `run()` call. `main.py` picks that up and decides what to show in the terminal vs. write silently to the stream log. So to summarize the main idea is:
+**No custom Logger class is needed.** The binary handles all of this natively. Use plain `print()` and `return` as normal Python.
+
+### How the binary structures its output
+
+Each tick the binary emits a two-layer JSON entry to stdout:
+
+```
+Outer layer (binary's own):
+  sandboxLog  →  platform/engine messages (position limit violations, errors etc.) — NOT your code
+  lambdaLog   →  JSON string wrapping the algo's complete output, which contains:
+                   inner sandboxLog  →  your print() output  e.g. "[DATA] {...}"
+                   inner lambdaLog   →  your traderData return value
+                   inner timestamp   →  tick timestamp
+```
+
+So `print()` → inner `sandboxLog`. `traderData` → inner `lambdaLog`. The outer `sandboxLog` is the binary talking, not you.
+
+### Logging channels
 
 | Channel | Destination | Purpose | Format | Best Practice |
 | :--- | :--- | :--- | :--- | :--- |
-| **`self.logger.print()`** | `{task_id}_stream.log` + terminal | **Humans.** Real-time debugging and terminal milestones. | Plain Text / String | **Cannot coexist with `[DATA]` on the same tick** (see below). Only use on ticks where you are NOT logging `[DATA]`. To be clear this is essentially useless currently, IF you want debug prints use a normal print (see below) if you want prints that persist in the logs use the DATA version below. |
-| **`self.logger.print("[DATA] ...")`** | `{task_id}_stream.log` only (silent) | **Post-run parsing.** Store structured data (orders, signals) per timestamp for offline analysis. | `[DATA] ` prefix + JSON string | **Use this every tick.** The `[DATA]` prefix is filtered from terminal output by `main.py` but is written to the stream log. **CRITICAL: this must be the ONLY `self.logger.print()` call on any tick where it runs.** `inter.py` parses internal data by stripping `[DATA] ` from the entire `sandboxLog` and calling `json.loads()` — mixing in any other print on the same tick corrupts the JSON and crashes the parser. |
-| **`traderData`** | Internal State / `lambdaLog` | **The Machine.** Persistent memory to pass variables to the next round. | JSON | **50k char limit in competition.** Only store what the bot needs to remember between ticks. Do NOT use this for logging. |
-| **`print()`** | raw stdout / terminal | **Terminal only, not in stream log.** Raw Python `print()` does appear in the terminal (via the backtester's `--print` flag), but is **not** written to `{task_id}_stream.log` and cannot be post-parsed. | — |  Use to print debug etc as normal, careful not to crash terminal... |
+| **`print(f"[DATA] ...")`** | `{task_id}_stream.log` (inner `sandboxLog`) | **Post-run parsing.** Store structured data (orders, signals) per timestamp for offline analysis. | `[DATA] ` prefix + JSON string | **Use this every tick.** `inter.py` finds the inner `sandboxLog`, strips `[DATA] `, and `json.loads()` the remainder. **Do not mix other prints on the same tick** — it will corrupt the JSON and crash the parser. |
+| **`traderData` return** | inner `lambdaLog` | **The Machine.** Persistent memory passed to the next tick. | JSON | **50k char limit in competition.** Only store what the bot needs to remember between ticks. Do NOT use this for logging. |
+| **`print()` (anything else)** | terminal only | Debug output visible during the run. Not written to stream log, not post-parseable. | — | Fine for debugging. Don't leave noisy prints in production runs. |
 
-When writing your `run` method, follow this sequence to ensure the backtester captures everything correctly:
-
-1. **Read Memory**: 
-   `memory = json.loads(state.traderData) if state.traderData else {}`
-
-2. **Build orders, compute signals, etc.**
-
-3. **Log `[DATA]`** (the only `self.logger.print()` call per tick): 
-   `self.logger.print(f"[DATA] {json.dumps({str(state.timestamp): logs})}")`
-
-4. **Save for Algo (Memory)**: 
-   `traderData = json.dumps(memory)`
-
-5. **Output at EOF run() method**: 
-   `self.logger.flush(state, result, conversions, traderData)`
-   `return result, conversions, traderData`
-
-Example (see `algos/version4.py` for a full working version):
+### run() method structure
 
 ```python
 def run(self, state: TradingState):
-    memory = json.loads(state.traderData) if state.traderData else {}
     result = {}
     logs = []
+    outgoing = {}
 
-    # ... build orders, compute signals ...
+    # ... build orders, compute signals, populate logs and outgoing ...
 
-    # ONE logger.print per tick — only [DATA], nothing else
-    self.logger.print(f"[DATA] {json.dumps({str(state.timestamp): logs})}")
-
-    traderData = json.dumps(memory)
-    self.logger.flush(state, result, conversions, traderData)
+    traderData = json.dumps(outgoing)
+    print(f"[DATA] {json.dumps({str(state.timestamp): logs})}")
     return result, conversions, traderData
 ```
 
-`inter.py` parses the `{task_id}_stream.log` after the run: it reads each JSON line, extracts `sandboxLog`, strips the `[DATA] ` prefix, and `json.loads()` the remainder. This is why only one `self.logger.print()` call is allowed per tick.
-
-The Logger class is **not** in `datamodel.py` — it is copy-pasted directly into each algo file. Check any existing algo (e.g. `algos/version1.py`) to see the full implementation.
+`inter.py` parses `{task_id}_stream.log` after the run: finds each inner JSON entry, extracts the inner `sandboxLog`, strips `[DATA] `, and `json.loads()` the remainder.
 
 ## Dev - Computations
 - `core/parser.py` handles both input modes. For the backtester it reads the `.log` file + `_stream.log`. For official uploads it reads the JSON directly. Either way it produces the same three DataFrames: `prices`, `trades`, `internal` — so everything downstream is identical.
