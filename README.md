@@ -30,9 +30,11 @@ when we can both easily run it locally for ourselves. The only main thing to thi
 3. The `[DATA]` print format (the JSON shape that `inter.py` depends on)
 4. existing frontend implementation
 
-### Two ways to get data in
-- **Run backtester** (`POST /run/`) — triggers the `prosperity4btx` binary with your algo file and a round ID. Results are streamed and auto-parsed.
+
+### Four ways to get data in
+- **Run backtester** (`POST /run/`) — triggers the `prosperity4btx` binary with your algo file and a round ID. Results are streamed and auto-parsed. Note if on frontend path prosperity4 you run the year 4 backtester and otherwise if on prosperity3 the year 3 tester!
 - **Upload official log** (`POST /upload-json`) — upload a `.log` file downloaded from the Prosperity website (JSON format). Skips the backtester entirely, parser runs directly for computations etc and then into the DB. Small note, frontend is not a fucking SaaS app, when you upload this process starts automatically directly, no "are you sure xx"
+- **Gridtester** run the gridtester with python `grid_search.py configs/example.yaml` from the backend dir! It will run a grid search on you specified params for you!
 
 **Adding columns in Supabase?** Rows accumulate QUICKLY so generally two main points. A) delete data from scrap runs B) (should be done auto see below) use alembic migs or default values in code when adding columns as to not nuke any previous runs.
 

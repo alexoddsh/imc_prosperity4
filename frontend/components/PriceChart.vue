@@ -8,6 +8,7 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps(['taskId', 'product', 'day', 'indicators', 'normalize', 'activeCategories', 'qtyRange', 'obLevels', 'showAlgoOb'])
+const emit = defineEmits(['obSnapshot'])
 const supabase = useSupabaseClient()
 const { subscribe, broadcast, broadcastHover } = useChartSync()
 const { fetchAll } = useFetchAll()
@@ -372,7 +373,7 @@ const renderChart = (priceRaw, tradeData, internalData) => {
 
   let prc = priceRaw
   if (props.normalize !== 'None') {
-    const NORM_KEY = { Mid: 'mid_price', WallMid1: 'wallmid1', WallMid2: 'wallmid2', 'WallMid2 (SMA)': 'wallmidsma', WallMid3: 'wallmid3' }
+    const NORM_KEY = { Mid: 'mid_price', WallMid1: 'wallmid1', WallMid2: 'wallmid2', 'WallMid2 (SMA)': 'wallmidsma', WallMid3: 'wallmid3', WallmidO: 'wallmido'   }
     const refKey = NORM_KEY[props.normalize]
     prc = priceRaw.map(d => {
       const ref = d[refKey]
@@ -385,11 +386,12 @@ const renderChart = (priceRaw, tradeData, internalData) => {
         bid_price_1: d.bid_price_1 - ref,
         bid_price_2: d.bid_price_2 != null ? d.bid_price_2 - ref : null,
         bid_price_3: d.bid_price_3 != null ? d.bid_price_3 - ref : null,
-        mid_price:   d.mid_price   - ref,
-        wallmid1:    d.wallmid1 != null ? d.wallmid1 - ref : null,
-        wallmid2:    d.wallmid2 != null ? d.wallmid2 - ref : null,
-        wallmidsma:   d.wallmidsma != null ? d.wallmid2 - ref : null,
-        wallmid3:     d.wallmid3 != null ? d.wallmid3 - ref: null,
+        mid_price: d.mid_price   - ref,
+        wallmid1: d.wallmid1 != null ? d.wallmid1 - ref : null,
+        wallmid2: d.wallmid2 != null ? d.wallmid2 - ref : null,
+        wallmidsma: d.wallmidsma != null ? d.wallmid2 - ref : null,
+        wallmid3: d.wallmid3 != null ? d.wallmid3 - ref: null,
+        wallmido: d.wallmido != null ? d.wallmido - ref: null,
         _ref: ref,
       }
     }).filter(Boolean)
@@ -442,6 +444,10 @@ const renderChart = (priceRaw, tradeData, internalData) => {
   if (props.indicators.includes('WallMid3')) {
     series.Wall3 = chart.addSeries(lc.LineSeries, { ...lineOpts, color: '#50ca54', lineWidth: 1.5 })
     series.Wall3.setData(prc.filter(d => valid(d.wallmid3)).map(d => ({ time: d.timestamp, value: d.wallmid3 })))
+  }
+  if (props.indicators.includes('WallMidO')) {
+    series.WallO = chart.addSeries(lc.LineSeries, { ...lineOpts, color: '#b91d92', lineWidth: 1.5 })
+    series.WallO  .setData(prc.filter(d => valid(d.wallmido)).map(d => ({ time: d.timestamp, value: d.wallmido })))
   }
 
   if (props.normalize !== 'None' && series.Ask) {
@@ -609,7 +615,13 @@ onMounted(async () => {
   const syncFn = range => chart?.timeScale().setVisibleLogicalRange(range)
   subscribe(syncFn)
   chart.timeScale().subscribeVisibleLogicalRangeChange(range => broadcast(syncFn, range))
-  chart.subscribeCrosshairMove(param => broadcastHover(null, param.time ?? null))
+  chart.subscribeCrosshairMove(param => {
+    broadcastHover(null, param.time ?? null)
+    if (param.time != null && cachedPriceRaw?.length) {
+      const row = cachedPriceRaw.find(r => r.timestamp === param.time)
+      if (row) emit('obSnapshot', row)
+    }
+  })
 
   if (props.taskId && props.product) await fetchData()
 })

@@ -12,6 +12,7 @@
           :qtyRange="qtyRange"
           :obLevels="obLevels"
           :showAlgoOb="showAlgoOb"
+          @obSnapshot="r => obSnap = r"
         />
       </div>
       <div class="sub-chart">
@@ -134,7 +135,24 @@
         </div>
       </div>
 
-      <div style="margin-top: auto;">
+      <div style="margin-top: auto; display:flex; flex-direction:column; gap:6px;">
+        <div>
+          <span class="sl">orderbook</span>
+          <div v-if="obRows" class="ob-widget">
+            <div v-for="(row, i) in obRows.asks" :key="'a'+i" class="ob-row ob-ask">
+              <span class="ob-v">{{ row.vol ?? '' }}</span>
+              <div class="ob-bar-track"><div class="ob-bar ob-bar-ask" :style="{ width: row.pct + '%' }"></div></div>
+              <span class="ob-p">{{ row.price }}</span>
+            </div>
+            <div class="ob-spread-line">{{ obRows.spread != null ? obRows.spread.toFixed(1) : '·' }}</div>
+            <div v-for="(row, i) in obRows.bids" :key="'b'+i" class="ob-row ob-bid">
+              <span class="ob-v">{{ row.vol ?? '' }}</span>
+              <div class="ob-bar-track"><div class="ob-bar ob-bar-bid" :style="{ width: row.pct + '%' }"></div></div>
+              <span class="ob-p">{{ row.price }}</span>
+            </div>
+          </div>
+          <div v-else class="ob-empty">— hover chart —</div>
+        </div>
         <div class="upload-container">
           <input type="file" accept=".log" @change="handleFileUpload"/>
         </div>
@@ -179,6 +197,26 @@ const stats    = ref({ trades: 0, own: 0, pnl: 0 })
 const hoverPnl = ref(null)
 const hoverPos = ref(null)
 const qtyRange = ref([1, 100])
+const obSnap   = ref(null)
+
+const obRows = computed(() => {
+  const r = obSnap.value
+  if (!r) return null
+  const vols = [1,2,3].flatMap(i => [r[`ask_volume_${i}`] ?? 0, r[`bid_volume_${i}`] ?? 0])
+  const maxVol = Math.max(...vols, 1)
+  const asks = [3,2,1].map(i => ({
+    price: r[`ask_price_${i}`],
+    vol:   r[`ask_volume_${i}`] ?? null,
+    pct:   ((r[`ask_volume_${i}`] ?? 0) / maxVol) * 100,
+  })).filter(x => x.price)
+  const bids = [1,2,3].map(i => ({
+    price: r[`bid_price_${i}`],
+    vol:   r[`bid_volume_${i}`] ?? null,
+    pct:   ((r[`bid_volume_${i}`] ?? 0) / maxVol) * 100,
+  })).filter(x => x.price)
+  const spread = asks.length && bids.length ? asks[asks.length - 1].price - bids[0].price : null
+  return { asks, bids, spread }
+})
 
 const categories = ref([
   { name: 'MAKER1',    bg: '#FF8C00', fg: '#fff', active: true },
@@ -397,5 +435,43 @@ watch(selectedDay, () => {fetchSummaryStats(activeTaskId.value)})
 }
 .bx div {
   width: 50%;
+}
+.ob-widget {
+  border: 1px solid #ddd;
+  background: #fff;
+  font-size: 10px;
+  overflow: hidden;
+}
+.ob-row {
+  display: grid;
+  grid-template-columns: 22px 1fr 40px;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 3px;
+}
+.ob-v { color: #999; text-align: right; }
+.ob-p { text-align: right; font-weight: 600; }
+.ob-ask .ob-p { color: #cc1111; }
+.ob-bid .ob-p { color: #1111cc; }
+.ob-bar-track { height: 5px; background: #f0f0f0; }
+.ob-bar { height: 100%; }
+.ob-bar-ask { background: rgba(200,0,0,0.25); }
+.ob-bar-bid { background: rgba(0,0,200,0.25); }
+.ob-spread-line {
+  text-align: center;
+  font-size: 9px;
+  color: #aaa;
+  border-top: 1px solid #eee;
+  border-bottom: 1px solid #eee;
+  padding: 1px 0;
+  letter-spacing: 0.3px;
+}
+.ob-empty {
+  border: 1px solid #ddd;
+  background: #fff;
+  font-size: 9px;
+  color: #bbb;
+  padding: 5px 4px;
+  text-align: center;
 }
 </style>

@@ -34,6 +34,19 @@
         <span :style="{ color: pnl >= 0 ? '#00aa44' : '#de0404' }">{{ fmt_pnl(pnl) }}</span>
       </div>
       <div v-if="!tooltip.run.products_pnl || !Object.keys(tooltip.run.products_pnl).length" style="color: #555;">no product data</div>
+      <div
+        v-if="tooltip.run.products_sharpes && Object.keys(tooltip.run.products_sharpes).length"
+        style="margin-top: 6px; border-top: 1px solid #333; padding-top: 6px;"
+      >
+        <div
+          v-for="(sharpe, product) in tooltip.run.products_sharpes"
+          :key="'sharpe-' + product"
+          style="display: flex; justify-content: space-between; gap: 16px;"
+        >
+          <span style="color: #aaa; text-transform: uppercase; font-size: 10px;">{{ product }} sharpe</span>
+          <span :style="{ color: sharpe >= 0 ? '#00aa44' : '#de0404' }">{{ sharpe?.toFixed(4) ?? '—' }}</span>
+        </div>
+      </div>
     </div>
 
     <table style="width: 100%; border-collapse: collapse;">
@@ -132,7 +145,7 @@ const hideTooltip = () => { tooltip.value.run = null }
 onMounted(async () => {
   const { data } = await supabase
     .from('backtest_runs')
-    .select('id, algo_name, dev, round_id, status, total_pnl, products_pnl, created_at')
+    .select('id, algo_name, dev, round_id, status, total_pnl, products_pnl, products_sharpes, created_at')
     .neq('status', 'FAILED')
     .order('created_at', { ascending: false })
   if (data) runs.value = data
