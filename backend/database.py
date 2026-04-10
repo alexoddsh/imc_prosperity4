@@ -28,11 +28,13 @@ def fast_pg_insert(df: pd.DataFrame, table_name: str):
     finally:
         raw_conn.close()
 
-def update_backtest_status(task_id, status, pnl=0.0, product_pnls=None):
+def update_backtest_status(task_id, status, pnl=0.0, product_pnls=None, products_sharpes=None):
     if product_pnls is None:
         product_pnls = {}
+    if products_sharpes is None:
+        products_sharpes = {}
     with engine.begin() as conn:
         conn.execute(
-            text("UPDATE backtest_runs SET status = :s, total_pnl = :p, products_pnl = :pnls WHERE id = :id"),
-            {"s": status, "p": pnl, "pnls": json.dumps(product_pnls), "id": task_id}
+            text("UPDATE backtest_runs SET status = :s, total_pnl = :p, products_pnl = :pnls, products_sharpes = :sharpes WHERE id = :id"),
+            {"s": status, "p": pnl, "pnls": json.dumps(product_pnls), "sharpes": json.dumps(products_sharpes), "id": task_id}
         )

@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import io
 import re
 import json
@@ -92,7 +93,8 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
             success2 = normalizer.compute_wallmid2(product, prices)
             success3 = normalizer.compute_wallmid3(product, prices)
             success4 = normalizer.compute_wallmid_ma(product, prices)
-            if not success1 or not success2 or not success3 or not success4:
+            success5 = normalizer.compute_wallmid_corrected(product, prices)
+            if not success1 or not success2 or not success3 or not success4 or not success5:
                 raise Exception(f"  [WALLMID]: Pre compute failed {product}")
 
         #prev insert computations (trades)
@@ -106,7 +108,7 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
             if not success:
                 raise Exception(f"  [POSITION]: Pre compute failed {product}")
         
-        #pnl handling
+        #pnl handling 
         final_pnl = 0
         products_pnls = {}
         if system == SystemEnum.PROSPERITY4TBX:
@@ -119,7 +121,13 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
                 pnl = prices[(prices["timestamp"] == 199900) & (prices["product"] == product)]["profit_and_loss"].item()
                 products_pnls.update({str(product): pnl})
                 final_pnl += pnl
-
+        
+        products_sharpes = {}
+        for product in products:
+            returns = np.diff(prices[prices["product"] == product]["profit_and_loss"].to_numpy())
+            sharpe = np.mean(returns) / np.std(returns)
+            products_sharpes.update({str(product): sharpe})
+            
         prices.insert(0, "backtest_id", str(task_id))
         trades.insert(0, "backtest_id", str(task_id))
         internal.insert(0, "backtest_id", str(task_id))
@@ -157,7 +165,7 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
             executor.submit(fast_pg_insert, trades, "trades")
             executor.submit(fast_pg_insert, internal, "internal")
         
-        update_backtest_status(str(task_id), "COMPLETED", final_pnl, products_pnls)
+        update_backtest_status(str(task_id), "COMPLETED", final_pnl, products_pnls, products_sharpes)
         return 1
 
     except Exception as e:

@@ -11,30 +11,26 @@ POSITION_LIMITS = {
 #TECHNICALS
 MA_WINDOW = 10
 
+# --- GRID PARAMS ---
+UNWIND_THRESHOLD_LONG = 10
+UNWIND_THRESHOLD_SHORT = -10
+TAKE_PROFIT_LONG = 20
+TAKE_PROFIT_SHORT = -20
+PRICE_OFFSET_ASK = 1
+PRICE_OFFSET_BID = 1
+ASK_SKEW1 = -1
+ASK_SKEW2 = -2
+BID_SKEW1 = 1
+BID_SKEW2 = 2
+# --- END GRID PARAMS ---
+
 #SYMBOLS
 Product = Literal["EMERALDS", "TOMATOES"]
 
-class Logger:
-    def __init__(self) -> None:
-        self.logs = ""
-
-    def print(self, *objects: any, sep: str = " ", end: str = "\n") -> None:
-        self.logs += sep.join(map(str, objects)) + end
-
-    def flush(self, state, orders, conversions, traderData):
-        print(json.dumps({
-            "sandboxLog": self.logs,
-            "lambdaLog": traderData,
-            "timestamp": state.timestamp,
-        }, separators=(",", ":")))
-        self.logs = ""
-
-
 class MarketTrader:
-    def __init__(self, product, state, logger):
+    def __init__(self, product, state):
         self.product = product 
         self.state = state 
-        self.logger = logger
         self.incoming_trader_data = self.get_trader_data()
         
         self.position_limit = POSITION_LIMITS.get(self.product.upper(), 0)
@@ -48,6 +44,7 @@ class MarketTrader:
         self.wall_mid1 = self.compute_wallmid1()
         self.wall_mid2, self.td_key_wallmid = self.compute_wallmid2()
         self.wall_mid3 = self.compute_wallmid3()
+        self.optimized_wallmid = self.compute_optimized_wallmid()
         
         self.outgoing_trader_data = self.get_outgoing_trader_data()
         self.wall_midma = self.compute_wallmidma() #needs outgoing TD for computation
@@ -169,6 +166,19 @@ class MarketTrader:
         
         return wallmid
     
+    def compute_optimized_wallmid(self) -> float:
+        ask, _ = self.get_best_ask()
+        bid, _ = self.get_best_bid()
+        mid = (ask+bid) / 2
+        mid_offset = float(mid - self.wall_mid3)
+
+        if abs(mid_offset) <= 0.5:
+            fv = self.wall_mid3 + 0.734 * mid_offset
+        else:
+            fv = self.wall_mid3
+        
+        return fv
+    
     def compute_wallmidma(self) -> float:
         window_data = []
         reversed_items = list(self.outgoing_trader_data.get("WALLMID_DATA", {}).items())[::-1]
@@ -185,70 +195,105 @@ class MarketTrader:
 
 
 class InformedTaker(MarketTrader):
-    def __init__(self, product, state, logger):
-        super().__init__(product, state, logger)
+    def __init__(self, product, state):
+        super().__init__(product, state)
 
-        
 
 class BasicMaker(MarketTrader):
-    def __init__(self, product, state, logger):
-        super().__init__(product, state, logger)
+    def __init__(self, product, state):
+        super().__init__(product, state)
 
     def produce_orders(self) -> dict[Product, Order]:
         orders = []
     
-        ##TAKING ALL PROFITABLE
-        for sp, sv in self.sell_orders.items():
-            if int(sp) < self.wall_mid3:
-                self.bid(sp, sv, orders)
+        ##EMERALDS
         
-        for bp, bv in self.buy_orders.items():
-            if int(bp) > self.wall_mid3:
-                self.ask(bp, bv, orders)
-        
-        #ACTIVE UNWINDING AT EDGE = 0
-        if self.current_position > 50:
-            for bp, bv in self.buy_orders.items():
-                if int(bp) >= int(self.wall_mid3):
-                    self.ask(bp, bv, orders)
-
-        elif self.current_position < -50:
+        if self.product == "EMERALDS":
+            # TAKING ALL PROFITABLE
             for sp, sv in self.sell_orders.items():
-                if int(sp) <= int(self.wall_mid3):
+                if int(sp) < self.wall_mid3:
                     self.bid(sp, sv, orders)
-
-        ##MAKING MARKET
-        skew_rate = self.current_position / self.position_limit 
-        skew_factor = 4/60
-        
-        if self.current_position > 0:
-            ask_skew = -int(skew_factor * self.current_position)
-            bid_skew = 0
-        elif self.current_position < 0:
-            bid_skew = int(skew_factor * self.current_position)
-            ask_skew = 0
-        else:
-            ask_skew = 0
-            bid_skew = 0
-    
-        ask_price = self.best_ask_price - 1 + ask_skew
-        bid_price = self.best_bid_price + 1 + bid_skew
-        ask_price = max(ask_price, int(self.wall_mid3)) 
-        bid_price = min(bid_price, int(self.wall_mid3))
             
-        if int(self.best_ask_price - 1) > self.wall_mid3:
-            vol_order = (self.position_limit - abs(self.current_position) / 2) * (1+skew_rate)
-            self.ask(ask_price, vol_order, orders)
+            for bp, bv in self.buy_orders.items():
+                if int(bp) > self.wall_mid3:
+                    self.ask(bp, bv, orders)
+            
+            # MAKING REST
+            skew_rate = self.current_position / self.position_limit 
         
-        if int(self.best_bid_price + 1) < self.wall_mid3:
-            vol_order = (self.position_limit - abs(self.current_position) / 2) * (1-skew_rate)
-            self.bid(bid_price, vol_order, orders)
+            ask_price = self.best_ask_price - 1
+            bid_price = self.best_bid_price + 1
+            
+            ask_price = max(ask_price, int(self.wall_mid3)) 
+            bid_price = min(bid_price, int(self.wall_mid3))
+                
+            if int(self.best_ask_price - 1) > self.wall_mid3:
+                vol_order = (self.position_limit - abs(self.current_position) / 2) * (1+skew_rate)
+                self.ask(ask_price, vol_order, orders)
+            
+            if int(self.best_bid_price + 1) < self.wall_mid3:
+                vol_order = (self.position_limit - abs(self.current_position) / 2) * (1-skew_rate)
+                self.bid(bid_price, vol_order, orders)
+        
+        ##TOMATOES
+
+        if self.product == "TOMATOES":
+            # TAKING ALL PROFITABLE
+            if self.current_position < TAKE_PROFIT_LONG:
+                for sp, sv in self.sell_orders.items():
+                    if int(sp) < self.optimized_wallmid:
+                        self.bid(sp, sv, orders)
+            
+            if self.current_position > TAKE_PROFIT_SHORT:
+                for bp, bv in self.buy_orders.items():
+                    if int(bp) > self.optimized_wallmid:
+                        self.ask(bp, bv, orders)
+
+            #ACTIVE UNWINDING AT EDGE = 0
+            if self.current_position > UNWIND_THRESHOLD_LONG:
+                for bp, bv in self.buy_orders.items():
+                    if int(bp) >= int(self.optimized_wallmid):
+                        self.ask(bp, bv, orders)
+
+            elif self.current_position < -UNWIND_THRESHOLD_SHORT:
+                for sp, sv in self.sell_orders.items():
+                    if int(sp) <= int(self.optimized_wallmid):
+                        self.bid(sp, sv, orders)
+
+            ##MAKING MARKET
+            skew_rate = self.current_position / self.position_limit 
+            match self.current_position:
+                    case s if s > 65:
+                        ask_skew = ASK_SKEW2 #decrease ask to sell more
+                    case s if s > 50:
+                        ask_skew = ASK_SKEW1
+                    case _:
+                        ask_skew = 0
+
+            match self.current_position:
+                case s if s < -65:
+                    bid_skew = BID_SKEW2 #increase bid to buy more
+                case s if s < -50:
+                    bid_skew = BID_SKEW1
+                case _:
+                    bid_skew = 0
+        
+            ask_price = self.best_ask_price - PRICE_OFFSET_ASK + ask_skew
+            bid_price = self.best_bid_price + PRICE_OFFSET_BID + bid_skew
+            ask_price = max(ask_price, int(self.optimized_wallmid)) 
+            bid_price = min(bid_price, int(self.optimized_wallmid))
+                
+            if int(self.best_ask_price - 1) > self.optimized_wallmid:
+                vol_order = (self.position_limit - abs(self.current_position) / 2) * (1+skew_rate)
+                self.ask(ask_price, vol_order, orders)
+            
+            if int(self.best_bid_price + 1) < self.optimized_wallmid:
+                vol_order = (self.position_limit - abs(self.current_position) / 2) * (1-skew_rate)
+                self.bid(bid_price, vol_order, orders)
             
         return {self.product: orders}
            
 class Trader:
-    def __init__(self):
-        self.logger = Logger()
 
     def run(self, state: TradingState):
         result = {}
@@ -260,7 +305,7 @@ class Trader:
             "EMERALDS": BasicMaker
         }
         for product, TraderClass in traders.items():
-            trader_instance = TraderClass(product, state, self.logger)
+            trader_instance = TraderClass(product, state)
             outgoing[product] = trader_instance.outgoing_trader_data
 
             orders = trader_instance.produce_orders()        
@@ -269,9 +314,8 @@ class Trader:
             result.update(orders)
             
         conversions = 0
-
         traderData = json.dumps(outgoing)
-        self.logger.print(f"[DATA] {json.dumps({str(state.timestamp): logs})}")
-        self.logger.flush(state, result, conversions, traderData)
-
+        print(f"[DATA] {json.dumps({str(state.timestamp): logs})}")
+        
         return result, conversions, traderData
+        

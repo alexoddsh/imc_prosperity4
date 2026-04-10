@@ -1,0 +1,15 @@
+algo_file: optimized_tomatoes.py
+round: "0"
+year: "4"
+
+params:
+  UNWIND_THRESHOLD_LONG: [10]
+  UNWIND_THRESHOLD_SHORT: [-10]
+  TAKE_PROFIT_LONG: [10]
+  TAKE_PROFIT_SHORT: [-10]
+  ASK_SKEW1: [-1]
+  ASK_SKEW2: [-2]
+  BID_SKEW1: [1]
+  BID_SKEW2: [2]
+  PRICE_OFFSET_ASK: [1]
+  PRICE_OFFSET_BID: [1]
