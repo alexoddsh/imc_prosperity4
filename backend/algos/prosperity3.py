@@ -81,8 +81,8 @@ class MarketTrader:
         time = self.state.timestamp
         if time == 0:
             entered_trades = {}
-            entered_trades["sell"] = [{time : [0,0]}]
-            entered_trades["buy"] = [{time : [0,0]}]
+            entered_trades["sell"] = []
+            entered_trades["buy"] = []
         else:
             entered_trades = self.incoming_trader_data["ENTERED_TRADES"]
             if self.product in self.state.own_trades.keys():

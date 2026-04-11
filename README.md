@@ -7,36 +7,28 @@ just using the superior "pipenv" since that is best for this project and already
 To get the backend and backtester running locally, follow these steps. Note that the system relies on a specific virtual environment and binary executable path.
 
 ### 1. Clone & Environment Setup
-Ensure you have `pipenv` installed to manage the specific virtual environment used by the sub-processes.
+Ensure you have `uv` installed to manage the specific virtual environment used by the sub-processes.
 ```bash
 # Install dependencies
-pipenv install
+uv pip install
 
 # Environment variables
 cp .env.example .env
 ```
-**Note** I didn't add to gitignore, please do so after you have copied the original. Also you have been invited to supabase. 
-
-### 2. Binary Exec Path
-The system uses a custom binary prosperity4btx located in your virtualenv. Main.py reads this path from your .env file. So you after installing the executable (which is already a req in the pipfile) you need to find its path and add to .env. Read about how the backtester works at:
-- https://github.com/Xeeshan85/imc-prosperity-4-backtester
 
 ## Starting... & Using
-The backend uses FastAPI to manage simulation tasks. Start the server with: "uvicorn main:app --reload" or however you want to run it. Then start the frontend as usual with "npm run dev". Code your algo in the *backend/algos* folder. Try to name them something unique. So to be 100% I scrapped the vercel + railway hosting idea, just adds unneccessary lag 
-when we can both easily run it locally for ourselves. The only main thing to think about as usual is to not push incompatible stuff (obvs) so generally these are not to be touched at all:
+The backend uses FastAPI to manage simulation tasks. Start the server with: "uvicorn main:app --reload" or however you want to run it. Then start the frontend as usual with "npm run dev". Code your algo in the *backend/algos* folder. Try to name them something unique. Generally these are not to be touched at all:
 
 1. `main.py`
-2. `core/parser.py` (first half)
+2. `core/parser.py` 
 3. The `[DATA]` print format (the JSON shape that `inter.py` depends on)
 4. existing frontend implementation
 
 
-### Four ways to get data in
-- **Run backtester** (`POST /run/`) — triggers the `prosperity4btx` binary with your algo file and a round ID. Results are streamed and auto-parsed. Note if on frontend path prosperity4 you run the year 4 backtester and otherwise if on prosperity3 the year 3 tester!
-- **Upload official log** (`POST /upload-json`) — upload a `.log` file downloaded from the Prosperity website (JSON format). Skips the backtester entirely, parser runs directly for computations etc and then into the DB. Small note, frontend is not a fucking SaaS app, when you upload this process starts automatically directly, no "are you sure xx"
-- **Gridtester** run the gridtester with python `grid_search.py configs/example.yaml` from the backend dir! It will run a grid search on you specified params for you!
-
-**Adding columns in Supabase?** Rows accumulate QUICKLY so generally two main points. A) delete data from scrap runs B) (should be done auto see below) use alembic migs or default values in code when adding columns as to not nuke any previous runs.
+### 3 Ways to run it
+- **Run backtester** (`POST /run/`) — triggers the backtester binary with your algo file and a round ID. Results are streamed and auto-parsed. Note if on frontend path prosperity4 you run the year 4 backtester and otherwise if on prosperity3 the year 3 tester!
+- **Upload official log** (`POST /upload-json`) — upload a `.log` file downloaded from the Prosperity website (.log format). Skips the backtester entirely, parser runs directly for computations etc and then into the DB.
+- **Gridtester** run the gridtester with `python grid_search.py configs/example.yaml` from the backend dir! It will run a grid search on you specified params for you! Does not insert in the database. 
 
 ### Automatic cleanup job (`backend/cleanup.py`)
 Runs once on startup and then every 30 minutes in the background. It deletes from `backtest_runs` — child rows in `trades`, `prices`, and `internal` are removed automatically via `ON DELETE CASCADE`. Tunables for this are constants at the top of the file.
@@ -50,11 +42,9 @@ Runs once on startup and then every 30 minutes in the background. It deletes fro
 | Global top-N | For runs older than 3 hours, keeps only the top 100 globally |
 
 ## Dev - Simulation and Logs 
-- `main.py` -> runs the prosperity4btx backtester executable against the specified algo file in */backend/algos*. Two log files are produced per run, both written into */backend/logs/*:
-  - **`{task_id}.log`** — written by the prosperity4btx binary itself (via `--out`). Contains the structured Activities log (prices CSV) and Trade History (trades JSON) that the parser reads.
+- `main.py` -> runs the backtester against the specified algo file in */backend/algos*. Two log files are produced per run, both written into */backend/logs/*:
+  - **`{task_id}.log`** — written by the backtester module itself (via `--out`). Contains the structured Activities log (prices CSV) and Trade History (trades JSON) that the parser reads.
   - **`{task_id}_stream.log`** — written by `main.py` by capturing every line of stdout from the subprocess. Contains the raw JSON lines emitted by the binary each tick, plus non-JSON status lines. This is what `inter.py` reads for internal data.
-
-**No custom Logger class is needed.** The binary handles all of this natively. Use plain `print()` and `return` as normal Python.
 
 ### How the binary structures its output
 
@@ -75,9 +65,9 @@ So `print()` → inner `sandboxLog`. `traderData` → inner `lambdaLog`. The out
 
 | Channel | Destination | Purpose | Format | Best Practice |
 | :--- | :--- | :--- | :--- | :--- |
-| **`print(f"[DATA] ...")`** | `{task_id}_stream.log` (inner `sandboxLog`) | **Post-run parsing.** Store structured data (orders, signals) per timestamp for offline analysis. | `[DATA] ` prefix + JSON string | **Use this every tick.** `inter.py` finds the inner `sandboxLog`, strips `[DATA] `, and `json.loads()` the remainder. **Do not mix other prints on the same tick** — it will corrupt the JSON and crash the parser. |
-| **`traderData` return** | inner `lambdaLog` | **The Machine.** Persistent memory passed to the next tick. | JSON | **50k char limit in competition.** Only store what the bot needs to remember between ticks. Do NOT use this for logging. |
-| **`print()` (anything else)** | terminal only | Debug output visible during the run. Not written to stream log, not post-parseable. | — | Fine for debugging. Don't leave noisy prints in production runs. |
+| **`print(f"[DATA] ...")`** | `{task_id}_stream.log` (inner `sandboxLog`) | **Post-run parsing.** Store structured data (orders, signals) per timestamp for post run analysis. | `[DATA] ` prefix + JSON string | **Use this every tick.** `inter.py` finds the inner `sandboxLog`, strips `[DATA] `, and `json.loads()` the remainder. **Do not mix other prints on the same tick** — it will corrupt the JSON and crash the parser. |
+| **`traderData` return** | inner `lambdaLog` | **The Machine.** Persistent memory passed to the next tick. | JSON | **50k char limit in competition.** Only store what the bot needs to remember between ticks. You know this already, the point is the traderdata can also be seen in `lambdaLog` post run.|
+| **`print()` (anything else)** | terminal only | Debug output visible during the run. Not written to stream log, not post-parseable. | — | Fine for debugging.|
 
 ### run() method structure
 
@@ -97,38 +87,21 @@ def run(self, state: TradingState):
 `inter.py` parses `{task_id}_stream.log` after the run: finds each inner JSON entry, extracts the inner `sandboxLog`, strips `[DATA] `, and `json.loads()` the remainder.
 
 ## Dev - Computations
-- `core/parser.py` handles both input modes. For the backtester it reads the `.log` file + `_stream.log`. For official uploads it reads the JSON directly. Either way it produces the same three DataFrames: `prices`, `trades`, `internal` — so everything downstream is identical.
+- `core/parser.py` handles both input modes. For the backtester it reads the `.log` file + `_stream.log`. For official uploads it reads the log file directly. Either way it produces the same three DataFrames: `prices`, `trades`, `internal` — so everything downstream is identical.
 
 The `internal` df is built from `[DATA]` log entries via `core/inter.py` and stored in the Supabase `internal` table.
 
 The second half calls all the **pre computations** defined in */backend/core*. These computations modify the created
 dataframe BEFORE inserting in the DB which is done at the end, this as it is a lot easier to NOT have to modify any
-existing data in Supabase. This keeps the flow coherently tied only to pandas/np mgmt and database data is always good. **NOTE** here that all computations return a bool `True` **IF and ONLY IF** the full computations complete perfectly. And only **IF** all computations return `True` do we persist a run in the db, otherwise it is discarded.
+existing data in Supabase. This keeps the flow coherently tied only to pandas/np mgmt and database data is always good. 
 
-Current computation pipeline (in order):
-```python
-# prices pre-compute
-normalizer.compute_wallmid1(product, prices)    # core/normalizer.py
-normalizer.compute_wallmid2(product, prices)
-normalizer.compute_wallmid_ma(product, prices)  # rolling MA of wallmid2
-
-# trades pre-compute
-classification.compute_classes(product, prices, trades)  # core/classification.py
-position.compute_position(product, trades)               # core/position.py
-```
-
-Then all three tables are inserted via `fast_pg_insert` from `database.py`:
-```python
-fast_pg_insert(trades, "trades")
-fast_pg_insert(prices, "prices")
-fast_pg_insert(internal, "internal")
-```
+**NOTE** here that all computations return a bool `True` **IF and ONLY IF** the full computations complete perfectly. And only **IF** all computations return `True` do we persist a run in the db, otherwise it is discarded.
 
 - Why fail-first? Debugging messy data is a headache, so the general principle is no stupid ffils, default values etc. if we expect a value and it is not there then the run should fail 100%. 
 
 ## Best Practices — Data & Storage
 
-Every run inserts ~40K rows across three tables and generates ~250MB of log files on disk. Treat storage as a constraint, not an afterthought.
+Every run inserts ~40K rows across three tables and generates ~250MB of log files on disk....
 
 ### Table purposes
 
@@ -157,7 +130,7 @@ Don't default to `integer` or `bigint` for everything. If adding a new column, p
 IMC wiki tells use to use jsonpickle, piece of advice do NOT do that. Use `json.dumps` / `json.loads` for `traderData`, never `jsonpickle`. jsonpickle adds type metadata (e.g. `{"py/object": ...}`) that bloats the payload — wastes the 50K char competition limit and produces bigger `lambdaLog` entries in the stream log. 
 
 ### Log files on disk
-Log files in `backend/logs/` are **not auto-deleted**. Two files (~250MB combined) are created per run and stick around forever. Clean them up manually or nuke your PC. The DB cleanup job only prunes Supabase rows — it does not touch local files since that seemed to wake stuff even worse. 
+Log files in `backend/logs/` are **not auto-deleted**. Two files (~250MB combined) are created per run and stick around forever. Clean them up manually or nuke your PC. The DB cleanup job only prunes Supabase rows — it does not touch local files. 
 
 ### General principles
 - **Fail-first, no silent defaults.** If a value is missing, raise — don't ffill/default to 0 etc. Messy data is harder to debug than a failed run.

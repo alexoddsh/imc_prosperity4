@@ -11,7 +11,6 @@ from typer import Argument, Option, Typer
 from backtester.data import has_day_data
 from backtester.file_reader import FileReader, FileSystemReader, PackageResourcesReader
 from backtester.models import BacktestResult, TradeMatchingMode
-from backtester.open import open_visualizer
 from backtester.runner import run_backtest
 
 
@@ -245,10 +244,6 @@ def cli(
         merged_results = reduce(lambda a, b: merge_results(a, b, merge_pnl, not original_timestamps), results)
         write_output(output_file, merged_results)
         print(f"\nSuccessfully saved backtest results to {format_path(output_file)}")
-
-    if vis and output_file is not None:
-        open_visualizer(output_file)
-
 
 def main() -> None:
     app()

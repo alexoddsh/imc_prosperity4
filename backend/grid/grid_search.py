@@ -30,15 +30,6 @@ def load_config(config_path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def get_binary(year: str) -> str:
-    key = "PROSPERITY4BTX_PATH" if year == "4" else "PROSPERITY3_PATH"
-    binary = os.environ.get(key)
-    if not binary:
-        print(f"[GRID] ERROR: {key} env var not set")
-        sys.exit(1)
-    return binary
-
-
 def parse_template(algo_path: Path) -> tuple[str, str, str, dict]:
     text = algo_path.read_text()
 
@@ -113,16 +104,19 @@ def extract_pnl(log_path: Path) -> tuple[float, dict[str, float]]:
     return total, product_totals
 
 
-def run_single(binary: str, round_id: str, combo_params: dict, before: str, after: str) -> tuple[float, dict[str, float], float]:
+def run_single(year: int, round_id: str, combo_params: dict, before: str, after: str) -> tuple[float, dict[str, float], float]:
     write_tmp_algo(before, after, combo_params)
     os.makedirs(TMP_LOG.parent, exist_ok=True)
 
+    data_input = f"/Users/alexoddsh/prosperity/backend/backtester/resources-{year}"
+
     cmd = [
-        binary,
+        sys.executable, "-m", "backtester",
         str(TMP_ALGO),
         round_id,
+        "--data", data_input,
         "--out", str(TMP_LOG),
-        "--print"
+        "--no-progress"
     ]
 
     env = os.environ.copy()
@@ -146,7 +140,7 @@ def run_single(binary: str, round_id: str, combo_params: dict, before: str, afte
         if proc.stdout:
             print(f"[GRID] STDOUT (last 500): {proc.stdout[-500:]}")
         print(f"[GRID] CMD: {' '.join(cmd)}")
-        print(f"[GRID] TMP_ALGO first 30 lines:")
+        print("[GRID] TMP_ALGO first 30 lines:")
         for i, line in enumerate(TMP_ALGO.read_text().splitlines()[:30]):
             print(f"  {i+1}: {line}")
         return 0.0, {}, duration
@@ -183,7 +177,6 @@ def main():
     year = str(config["year"])
     search_params = config["params"]
 
-    binary = get_binary(year)
     algo_path = ALGOS_DIR / algo_file
 
     before, _, after, defaults = parse_template(algo_path)
@@ -224,7 +217,7 @@ def main():
     for i, name in enumerate(param_names):
         first_combo_params[name] = all_combos[0][i]
 
-    total_pnl, product_pnls, duration = run_single(binary, round_id, first_combo_params, before, after)
+    total_pnl, product_pnls, duration = run_single(year, round_id, first_combo_params, before, after)
     products = sorted(product_pnls.keys())
 
     combo_str = ", ".join(f"{k}={first_combo_params[k]}" for k in param_names)
@@ -253,7 +246,7 @@ def main():
             for i, name in enumerate(param_names):
                 combo_params[name] = combo[i]
 
-            total_pnl, product_pnls, duration = run_single(binary, round_id, combo_params, before, after)
+            total_pnl, product_pnls, duration = run_single(year, round_id, combo_params, before, after)
 
             row = {"run_id": idx, "total_pnl": total_pnl, "duration_s": round(duration, 2)}
             for i, name in enumerate(param_names):
