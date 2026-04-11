@@ -20,6 +20,10 @@ PRICE_OFFSET_ASK = 1
 PRICE_OFFSET_BID = 1
 ASK_SKEW1 = -1
 ASK_SKEW2 = -2
+ASK_SKEW_LEVEL2 = 65
+ASK_SKEW_LEVEL1 = 50
+BID_SKEW_LEVEL2 = -65
+BID_SKEW_LEVEL1 = -50
 BID_SKEW1 = 1
 BID_SKEW2 = 2
 # --- END GRID PARAMS ---
@@ -238,6 +242,7 @@ class BasicMaker(MarketTrader):
         ##TOMATOES
 
         if self.product == "TOMATOES":
+            
             # TAKING ALL PROFITABLE
             if self.current_position < TAKE_PROFIT_LONG:
                 for sp, sv in self.sell_orders.items():
@@ -263,17 +268,17 @@ class BasicMaker(MarketTrader):
             ##MAKING MARKET
             skew_rate = self.current_position / self.position_limit 
             match self.current_position:
-                    case s if s > 65:
+                    case s if s > ASK_SKEW_LEVEL2:
                         ask_skew = ASK_SKEW2 #decrease ask to sell more
-                    case s if s > 50:
+                    case s if s > ASK_SKEW_LEVEL1:
                         ask_skew = ASK_SKEW1
                     case _:
                         ask_skew = 0
 
             match self.current_position:
-                case s if s < -65:
+                case s if s < BID_SKEW_LEVEL2:
                     bid_skew = BID_SKEW2 #increase bid to buy more
-                case s if s < -50:
+                case s if s < BID_SKEW_LEVEL1:
                     bid_skew = BID_SKEW1
                 case _:
                     bid_skew = 0

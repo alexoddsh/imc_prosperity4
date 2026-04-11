@@ -5,6 +5,7 @@ import logging
 import json
 import subprocess
 import shutil
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime, timezone
@@ -57,18 +58,20 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str, year: str):
         log_path = os.path.join(log_dir, f"{task_id}.log")
 
         algo_dir = os.path.dirname(algo_path) 
-        if year == str(4):
-            binary_exec = os.environ.get("PROSPERITY4BTX_PATH")
-        elif year == str(3):
-            binary_exec = os.environ.get("PROSPERITY3_PATH")
-
+        
         env = os.environ.copy()
-        env["PYTHONPATH"] = f"{algo_dir}:{env.get('PYTHONPATH', '')}"
+        env["PYTHONPATH"] = f"{base_path}:{env.get('PYTHONPATH', '')}"
+
+        if year == "4":
+            data_input = "/Users/alexoddsh/prosperity/backend/backtester/resources-4"
+        elif year == "3":
+            data_input = "/Users/alexoddsh/prosperity/backend/backtester/resources-3"
 
         cmd = [
-            binary_exec, 
+            sys.executable, "-m", "backtester",
             algo_path, 
             round_id, 
+            "--data", data_input, 
             "--out", log_path,
             "--print"
         ]

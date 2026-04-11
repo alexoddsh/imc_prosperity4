@@ -211,16 +211,24 @@ class InformedTaker(MarketTrader):
                 if trade.quantity == sus_vol:
                     if trade.price - tolerance <= prev_dl_ask: 
                         self.bid(self.best_ask_price, 20, orders)
-                        if self.entered_trades["buy"] and (faulty_trade_time := list(self.entered_trades["buy"][-1].keys())[0]):     
-                            sv, sq = self.entered_trades["buy"][-1][faulty_trade_time] 
-                            self.ask(sv, sq, orders)
-
+                        
                     elif trade.price + tolerance >= prev_dh_bid:
                         self.ask(self.best_bid_price, 20, orders)
-                        if self.entered_trades["sell"] and (faulty_trade_time := list(self.entered_trades["sell"][-1].keys())[0]):     
-                            bv, bq = self.entered_trades["sell"][-1][faulty_trade_time] 
-                            self.bid(bv, bq, orders)
-        
+                        
+        #reverse prev false signal trades -> notice we take at spread to escape position
+        if self.best_ask_price + 1 < prev_dl_ask:
+            try: 
+                if self.incoming_trader_data["ENTERED_TRADES"]["sell"][0]: #we only have one l/s at a time!
+                    self.bid(self.best_ask_price, 20, orders)
+            except IndexError:
+                pass
+        elif self.best_bid_price - 1 > prev_dh_bid:
+            try:
+                if self.incoming_trader_data["ENTERED_TRADES"]["buy"][0]:
+                    self.ask(self.best_bid_price, 20, orders)
+            except IndexError:
+                pass
+            
         return {self.product: orders}            
 
 class BasicMaker(MarketTrader):
