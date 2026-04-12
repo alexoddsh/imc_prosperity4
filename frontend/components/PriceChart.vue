@@ -7,11 +7,9 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 
-const props = defineProps(['taskId', 'product', 'day', 'indicators', 'normalize', 'activeCategories', 'qtyRange', 'obLevels', 'showAlgoOb'])
+const props = defineProps(['taskId', 'product', 'day', 'indicators', 'normalize', 'activeCategories', 'qtyRange', 'obLevels', 'showAlgoOb', 'priceData', 'tradeData', 'internalData'])
 const emit = defineEmits(['obSnapshot'])
-const supabase = useSupabaseClient()
 const { subscribe, broadcast, broadcastHover } = useChartSync()
-const { fetchAll } = useFetchAll()
 
 const el         = ref(null)
 const tooltipEl  = ref(null)
@@ -491,49 +489,16 @@ const renderChart = (priceRaw, tradeData, internalData) => {
   chart.timeScale().fitContent()
 }
 
-const fetchData = async () => {
-  if (!lc || !chart || !props.taskId || !props.product || props.day === '') return
-
-  let priceQuery = supabase.from('prices')
-    .select('*')
-    .eq('backtest_id', props.taskId)
-    .eq('product', props.product)
-
-  let tradeQuery = supabase.from('trades')
-    .select('*')
-    .eq('backtest_id', props.taskId)
-    .eq('symbol', props.product)
-
-  let internalQuery = supabase.from('internal')
-    .select('*')
-    .eq('backtest_id', props.taskId)
-    .eq('product', props.product)
-    .neq('order_quantity', 0)
-
-  if (props.day !== 'all') {
-    priceQuery    = priceQuery.eq('day', props.day)
-    tradeQuery    = tradeQuery.eq('day', props.day)
-    internalQuery = internalQuery.eq('day', props.day)
-  }
-
-  priceQuery    = priceQuery.order('timestamp', { ascending: true })
-  tradeQuery    = tradeQuery.order('timestamp', { ascending: true })
-  internalQuery = internalQuery.order('timestamp', { ascending: true })
-
-  const [priceRaw, tradeData, internalData] = await Promise.all([
-    fetchAll(() => priceQuery),
-    fetchAll(() => tradeQuery),
-    fetchAll(() => internalQuery),
-  ])
-
-  cachedPriceRaw     = priceRaw
-  cachedTradeData    = tradeData
-  cachedInternalData = internalData
-
-  renderChart(priceRaw, tradeData, internalData)
+const renderFromProps = () => {
+  if (!lc || !chart) return
+  if (!props.priceData) return
+  cachedPriceRaw     = props.priceData
+  cachedTradeData    = props.tradeData
+  cachedInternalData = props.internalData
+  renderChart(cachedPriceRaw, cachedTradeData, cachedInternalData)
 }
 
-watch([() => props.taskId, () => props.product, () => props.day], fetchData)
+watch([() => props.priceData, () => props.tradeData, () => props.internalData], renderFromProps)
 watch([() => props.indicators, () => props.normalize, () => props.obLevels], () => renderChart(cachedPriceRaw, cachedTradeData, cachedInternalData), { deep: true })
 watch([() => props.activeCategories, () => props.qtyRange], pushMarkers, { deep: true })
 watch(() => props.showAlgoOb, pushAlgoOb)
@@ -623,7 +588,7 @@ onMounted(async () => {
     }
   })
 
-  if (props.taskId && props.product) await fetchData()
+  renderFromProps()
 })
 
 onUnmounted(() => { chart?.remove(); chart = null; lc = null })

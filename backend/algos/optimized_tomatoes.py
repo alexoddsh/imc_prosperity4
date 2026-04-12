@@ -5,7 +5,7 @@ from datamodel import TradingState, Order
 #POSITION LIMITS
 POSITION_LIMITS = {
     "EMERALDS": 80,
-    "TOMATOES": 80
+    "TOMATOES": 180
 }
 
 #TECHNICALS

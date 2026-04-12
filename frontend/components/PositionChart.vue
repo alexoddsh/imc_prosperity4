@@ -5,11 +5,9 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 
-const props = defineProps(['taskId', 'product', 'day'])
+const props = defineProps(['taskId', 'product', 'day', 'priceData', 'tradeData'])
 const emit = defineEmits(['hover'])
-const supabase = useSupabaseClient()
 const { subscribe, broadcast, subscribeHover, broadcastHover } = useChartSync()
-const { fetchAll } = useFetchAll()
 
 const el = ref(null)
 let lc         = null
@@ -17,31 +15,10 @@ let chart      = null
 let ser        = null
 let storedData = []
 
-const fetchData = async () => {
-  if (!lc || !chart || !props.taskId || !props.product || props.day === '') return
-
-  let priceQ = supabase.from('prices')
-    .select('timestamp, day') 
-    .eq('backtest_id', props.taskId)
-    .eq('product', props.product)
-    .order('timestamp', { ascending: true })
-
-  let tradeQ = supabase.from('trades')
-    .select('timestamp, algo_position, day')
-    .eq('backtest_id', props.taskId)
-    .eq('symbol', props.product)
-    .order('timestamp', { ascending: true })
-
-  if (props.day !== 'all' && props.day !== '') {
-    priceQ = priceQ.eq('day', props.day)
-    tradeQ = tradeQ.eq('day', props.day)
-  }
-
-  const [priceRows, tradeRows] = await Promise.all([
-    fetchAll(() => priceQ),
-    fetchAll(() => tradeQ),
-  ])
-
+const render = () => {
+  if (!lc || !chart) return
+  const priceRows = props.priceData
+  const tradeRows = props.tradeData ?? []
   if (!priceRows?.length) return
 
   const minDay = Math.min(...priceRows.map(p => p.day))
@@ -87,7 +64,7 @@ const fetchData = async () => {
   chart.timeScale().fitContent()
 }
 
-watch([() => props.taskId, () => props.product, () => props.day], fetchData)
+watch([() => props.priceData, () => props.tradeData], render)
 
 onMounted(async () => {
   lc = await import('lightweight-charts')
@@ -123,7 +100,7 @@ onMounted(async () => {
     broadcastHover(lookup, param.time ?? null)
   })
 
-  if (props.taskId && props.product) await fetchData()
+  render()
 })
 
 onUnmounted(() => { chart?.remove(); chart = null; lc = null })

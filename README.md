@@ -1,9 +1,5 @@
 # IMC4 Repo
 
-## Installation
-FIRST, if you are going to use a requirements file then please fucking add it to gitignore! But i highly suggest 
-just using the superior "pipenv" since that is best for this project and already in place for you to download!
-
 To get the backend and backtester running locally, follow these steps. Note that the system relies on a specific virtual environment and binary executable path.
 
 ### 1. Clone & Environment Setup

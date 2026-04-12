@@ -113,11 +113,16 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
         #pnl handling 
         final_pnl = 0
         products_pnls = {}
+        
         if system == SystemEnum.PROSPERITY4TBX:
             for product in products:
-                pnl = prices[(prices["timestamp"] == 999900) & (prices["product"] == product)]["profit_and_loss"].item() + prices[(prices["timestamp"] == 1999900) & (prices["product"] == product)]["profit_and_loss"].item()
+                for day in range(1, 4):
+                    day_pnl = prices[(prices["timestamp"] == (day*1000000)-100) & (prices["product"] == product)]["profit_and_loss"].item()
+                    pnl =+ day_pnl 
+                
                 final_pnl += pnl
                 products_pnls.update({str(product): pnl})
+                
         elif system == SystemEnum.PROSPERITY:
             for product in products:
                 pnl = prices[(prices["timestamp"] == 199900) & (prices["product"] == product)]["profit_and_loss"].item()

@@ -146,7 +146,9 @@ class MarketTrader:
                             for prev_trade_dict in entered_trades["sell"]:
                                 [time] = prev_trade_dict.keys()
                                 if time == order["reversing_timestamp"]:
-                                    prev_trade_dict[time]["reversed"] = True #mark old trade reversed
+                                    prev_trade_dict[time]["qty"] -= trade.quantity 
+                                    if prev_trade_dict[time]["qty"] <= 0:
+                                        prev_trade_dict[time]["reversed"] = True #mark old trade reversed
                                                                         
             if self.incoming_trader_data["PLACED_ORDERS"]["asks"]:
                 order = self.incoming_trader_data["PLACED_ORDERS"]["asks"]
@@ -156,7 +158,8 @@ class MarketTrader:
                         if trade.price == order_price and trade.seller == "SUBMISSION": #placed reversal order was executed!
                             for prev_trade_dict in entered_trades["buy"]:
                                 [time] = prev_trade_dict.keys()
-                                if time == order["reversing_timestamp"]:
+                                prev_trade_dict[time]["qty"] -= trade.quantity 
+                                if prev_trade_dict[time]["qty"] <= 0:
                                     prev_trade_dict[time]["reversed"] = True #mark old trade reversed
             
         if len(entered_trades["sell"]) > 20:

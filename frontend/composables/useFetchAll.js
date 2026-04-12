@@ -1,7 +1,10 @@
-// Supabase PostgREST hard-caps rows at max_rows (default 1000).
-// Fetches first page, then fires remaining pages in parallel batches of 10.
+// Supabase PostgREST hard-caps rows at the server's max-rows setting.
+// If max-rows is bumped (Supabase dashboard → Settings → API → db-max-rows)
+// to e.g. 50000, a single request pulls the whole dataset and skips the
+// pagination waterfall entirely. Falls back to parallel pagination if
+// the first response is saturated.
 export const useFetchAll = () => {
-  const fetchAll = async (queryFn, pageSize = 1000) => {
+  const fetchAll = async (queryFn, pageSize = 50000) => {
     const { data: first, error } = await queryFn().range(0, pageSize - 1)
     if (error || !first?.length) return []
     if (first.length < pageSize) return first

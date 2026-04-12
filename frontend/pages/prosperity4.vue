@@ -12,6 +12,9 @@
           :qtyRange="qtyRange"
           :obLevels="obLevels"
           :showAlgoOb="showAlgoOb"
+          :priceData="priceData"
+          :tradeData="tradeData"
+          :internalData="internalData"
           @obSnapshot="r => obSnap = r"
         />
       </div>
@@ -20,6 +23,7 @@
         :taskId="activeTaskId"
         :product="selectedProduct"
         :day="selectedDay"
+        :priceData="priceData"
         @hover="v => hoverPnl = v"
         />
       </div>
@@ -28,6 +32,8 @@
         :taskId="activeTaskId"
         :product="selectedProduct"
         :day="selectedDay"
+        :priceData="priceData"
+        :tradeData="tradeData"
         @hover="v => hoverPos = v"
         />
       </div>
@@ -175,7 +181,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 const config = useRuntimeConfig()
 const route = useRoute()
 const supabase = useSupabaseClient()
-const { fetchAll } = useFetchAll()
+const { priceData, tradeData, internalData, load: loadBacktestData } = useBacktestData()
 
 const activeTaskId = ref(route.query.taskId || '')
 const isRunning = ref(false)
@@ -298,61 +304,44 @@ const pollStatus = (id) => {
       await loadRecentRuns()
       if (data.status === 'COMPLETED') {
         await fetchProducts(id)
-        fetchSummaryStats(id)
       }
     }
   }, 2000)
 }
 
-const fetchSummaryStats = async (id) => {
+const fetchTradeCounts = async (id) => {
   if (!id || !selectedProduct.value) return
-  
-  let priceQuery = supabase.from('prices')
-    .select('timestamp, profit_and_loss, day')
-    .eq('backtest_id', id)
-    .eq('product', selectedProduct.value)
-
   let tradeQuery = supabase.from('trades')
     .select('*', { count: 'exact', head: true })
     .eq('backtest_id', id)
     .eq('symbol', selectedProduct.value)
-
   let ownTradeQuery = supabase.from('trades')
     .select('*', { count: 'exact', head: true })
     .eq('backtest_id', id)
     .eq('symbol', selectedProduct.value)
     .or('buyer.eq.SUBMISSION,seller.eq.SUBMISSION')
-
   if (selectedDay.value !== 'all' && selectedDay.value !== '') {
-    priceQuery = priceQuery.eq('day', selectedDay.value)
     tradeQuery = tradeQuery.eq('day', selectedDay.value)
     ownTradeQuery = ownTradeQuery.eq('day', selectedDay.value)
   }
-
-  priceQuery = priceQuery.order('day').order('timestamp')
-
   try {
-    const [rows, { count: trdCount }, { count: ownCount }] = await Promise.all([
-      fetchAll(() => priceQuery),
-      tradeQuery,
-      ownTradeQuery,
-    ])
-
-    if (rows?.length) {
-      if (selectedDay.value === 'all' || selectedDay.value === '') {
-        const lastPerDay = {}
-        rows.forEach(row => { lastPerDay[row.day] = row.profit_and_loss ?? 0 })
-        stats.value.pnl = Object.values(lastPerDay).reduce((a, b) => a + b, 0)
-      } else {
-        stats.value.pnl = rows[rows.length - 1].profit_and_loss ?? 0
-      }
-      timeRange.value = `${rows[0].timestamp} - ${rows[rows.length - 1].timestamp}`
-    }
-    
+    const [{ count: trdCount }, { count: ownCount }] = await Promise.all([tradeQuery, ownTradeQuery])
     stats.value.trades = trdCount || 0
     stats.value.own    = ownCount || 0
   } catch (e) {}
 }
+
+watch(priceData, rows => {
+  if (!rows?.length) return
+  if (selectedDay.value === 'all' || selectedDay.value === '') {
+    const lastPerDay = {}
+    rows.forEach(row => { lastPerDay[row.day] = row.profit_and_loss ?? 0 })
+    stats.value.pnl = Object.values(lastPerDay).reduce((a, b) => a + b, 0)
+  } else {
+    stats.value.pnl = rows[rows.length - 1].profit_and_loss ?? 0
+  }
+  timeRange.value = `${rows[0].timestamp} - ${rows[rows.length - 1].timestamp}`
+})
 
 const formatRunLabel = (run) => {
   const raw = run.created_at;
@@ -383,10 +372,12 @@ const formattedRuns = computed(() => {
 watch(activeTaskId, async (newId) => {
   if (!newId) return
   await fetchProducts(newId)
-  fetchSummaryStats(newId)
 }, { immediate: true })
-watch(selectedProduct, () => fetchSummaryStats(activeTaskId.value))
-watch(selectedDay, () => {fetchSummaryStats(activeTaskId.value)})
+
+watch([activeTaskId, selectedProduct, selectedDay], ([id, product, day]) => {
+  loadBacktestData(id, product, day)
+  fetchTradeCounts(id)
+}, { immediate: true })
 </script>
 
 <style scoped>

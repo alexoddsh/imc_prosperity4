@@ -5,11 +5,9 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 
-const props = defineProps(['taskId', 'product', 'day'])
+const props = defineProps(['taskId', 'product', 'day', 'priceData'])
 const emit = defineEmits(['hover'])
-const supabase = useSupabaseClient()
 const { subscribe, broadcast, subscribeHover, broadcastHover } = useChartSync()
-const { fetchAll } = useFetchAll()
 
 const el = ref(null)
 let lc          = null
@@ -17,20 +15,9 @@ let chart       = null
 let ser         = null
 let storedData  = []
 
-const fetchData = async () => {
-  if (!lc || !chart || !props.taskId || !props.product || props.day === '') return
-  
-  let query = supabase.from('prices')
-    .select('timestamp, profit_and_loss, day')
-    .eq('backtest_id', props.taskId)
-    .eq('product', props.product)
-
-  if (props.day !== 'all' && props.day !== '') {
-    query = query.eq('day', props.day)
-  }
-  query = query.order('timestamp', { ascending: true })
-
-  const rawData = await fetchAll(() => query)
+const render = () => {
+  if (!lc || !chart) return
+  const rawData = props.priceData
   if (!rawData?.length) return
 
   let chartPoints = []
@@ -78,7 +65,7 @@ const fetchData = async () => {
   
 }
 
-watch([() => props.taskId, () => props.product, () => props.day], fetchData)
+watch(() => props.priceData, render)
 
 onMounted(async () => {
   lc = await import('lightweight-charts')
@@ -114,7 +101,7 @@ onMounted(async () => {
     broadcastHover(lookup, param.time ?? null)
   })
 
-  if (props.taskId && props.product && props.day !== '') await fetchData()
+  render()
 })
 
 onUnmounted(() => { chart?.remove(); chart = null; lc = null })
