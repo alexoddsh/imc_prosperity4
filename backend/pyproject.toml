@@ -97,3 +97,6 @@ dependencies = [
     "yarl==1.23.0",
     "zstandard==0.25.0",
 ]
+
+[tool.ruff.lint]
+ignore = ["E701"]

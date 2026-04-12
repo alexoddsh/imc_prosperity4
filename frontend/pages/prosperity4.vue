@@ -68,9 +68,8 @@
         <span class="sl">day</span>
         <select v-model="selectedDay" class="raw-select" :disabled="!availableProducts.length">
           <option value="" disabled>— select day —</option>
-          <option value="all">All</option>
-          <option :value="-2">Day -2</option>
-          <option :value="-1">Day -1</option>
+          <option v-if="availableDays.length" value="all">All</option>
+          <option v-for="d in availableDays" :key="d" :value="d">Day {{ d }}</option>
         </select>
       </div>
 
@@ -182,6 +181,7 @@ const config = useRuntimeConfig()
 const route = useRoute()
 const supabase = useSupabaseClient()
 const { priceData, tradeData, internalData, load: loadBacktestData } = useBacktestData()
+const { fetchAll } = useFetchAll()
 
 const activeTaskId = ref(route.query.taskId || '')
 const isRunning = ref(false)
@@ -189,6 +189,7 @@ const algoName = ref('version.py')
 const roundId = ref('0')
 const recentRuns = ref([])
 const availableProducts = ref([])
+const availableDays = ref([])
 const selectedProduct = ref('')
 const selectedDay = ref('')
 const timeRange = ref('-')
@@ -255,6 +256,12 @@ const fetchProducts = async (id) => {
     if (unique.length && !unique.includes(selectedProduct.value)) {
       selectedProduct.value = unique[0]
     }
+  }
+  const dayRows = await fetchAll(() => supabase.from('prices').select('day').eq('backtest_id', id))
+  const days = [...new Set(dayRows.map(r => r.day))].sort((a, b) => a - b)
+  availableDays.value = days
+  if (days.length && !days.includes(selectedDay.value) && selectedDay.value !== 'all') {
+    selectedDay.value = days[0]
   }
 }
 
