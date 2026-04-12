@@ -118,8 +118,8 @@ def run_single(year: int, round_id: str, combo_params: dict, before: str, after:
         str(TMP_ALGO),
         round_id,
         "--data", data_input,
-        "--out", str(TMP_LOG),
         "--no-progress"
+        "--out", str(TMP_LOG),
     ]
 
     env = os.environ.copy()
@@ -131,7 +131,7 @@ def run_single(year: int, round_id: str, combo_params: dict, before: str, after:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        cwd=str(ALGOS_DIR),
+        cwd=str(ALGOS_DIR.parent),
         env=env,
     )
     duration = time.time() - t0
