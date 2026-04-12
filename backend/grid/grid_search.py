@@ -9,10 +9,10 @@ import itertools
 from io import StringIO
 from pathlib import Path
 from datetime import datetime
-
 import yaml
 import pandas as pd
 from dotenv import load_dotenv
+import platform
 
 load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 
@@ -108,7 +108,10 @@ def run_single(year: int, round_id: str, combo_params: dict, before: str, after:
     write_tmp_algo(before, after, combo_params)
     os.makedirs(TMP_LOG.parent, exist_ok=True)
 
-    data_input = f"/Users/alexoddsh/prosperity/backend/backtester/resources-{year}"
+    if platform.system() == 'Linux':
+        data_input = f"/home/victor/notes/imc_prosperity4/backend/backtester/resources-{year}"
+    else:
+        data_input = f"/Users/alexoddsh/prosperity/backend/backtester/resources-{year}"
 
     cmd = [
         sys.executable, "-m", "backtester",
@@ -166,7 +169,7 @@ def run_single(year: int, round_id: str, combo_params: dict, before: str, after:
 
 def main():
     parser = argparse.ArgumentParser(description="Grid search over algo parameters")
-    parser.add_argument("config", help="Path to YAML config file")
+    parser.add_argument("--config", help="Path to YAML config file")
     parser.add_argument("--max-runs", type=int, default=0, help="Cap total combinations (random sample)")
     parser.add_argument("--output", type=str, default="", help="Custom output CSV path")
     args = parser.parse_args()

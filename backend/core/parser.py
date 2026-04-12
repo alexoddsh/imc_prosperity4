@@ -1,4 +1,5 @@
 import pandas as pd
+import traceback
 import numpy as np
 import io
 import re
@@ -118,7 +119,7 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
             for product in products:
                 for day in range(1, 4):
                     day_pnl = prices[(prices["timestamp"] == (day*1000000)-100) & (prices["product"] == product)]["profit_and_loss"].item()
-                    pnl =+ day_pnl 
+                    pnl =+ day_pnl
                 
                 final_pnl += pnl
                 products_pnls.update({str(product): pnl})
@@ -180,6 +181,7 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
         return 1
 
     except Exception as e:
-        print(f"  [PARSER]: Parser Failed: {e}")
+        print(f"  [PARSER]: Parser Failed: <{type(e)}> {e} =>")
+        traceback.print_exc()
         update_backtest_status(str(task_id), "FAILED")
         return 0

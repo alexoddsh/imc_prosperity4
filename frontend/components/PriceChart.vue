@@ -80,7 +80,7 @@ const CAT_CFG = {
 // Draw order: MAKER1 first = rendered behind everything else
 const DRAW_ORDER = ['MAKER1', 'TAKER1', 'MAKER2', 'TAKER2', 'INFORMED1', 'TOXIC', 'ALGO']
 
-function drawShape(ctx, cls, x, y, pr) {
+function drawShape(ctx, cls, x, y, pr, buyer_cls, seller_cls) {
   const cfg = CAT_CFG[cls]
   if (!cfg) return
   const r = cfg.r * pr
@@ -95,17 +95,32 @@ function drawShape(ctx, cls, x, y, pr) {
     ctx.strokeRect(x - r, y - r, r * 2, r * 2)
 
   } else if (cls === 'TAKER1' || cls === 'TAKER2') {
-    // Filled triangle pointing up
-    ctx.fillStyle   = cfg.color
-    ctx.strokeStyle = cfg.stroke
-    ctx.lineWidth   = 1 * pr
-    ctx.beginPath()
-    ctx.moveTo(x,         y - r)
-    ctx.lineTo(x + r,     y + r * 0.75)
-    ctx.lineTo(x - r,     y + r * 0.75)
-    ctx.closePath()
-    ctx.fill()
-    ctx.stroke()
+    if (buyer_cls == "TAKER1" || buyer_cls == "TAKER2") {
+      // Filled triangle pointing up
+      ctx.fillStyle   = cfg.color
+      ctx.strokeStyle = cfg.stroke
+      ctx.lineWidth   = 1 * pr
+      ctx.beginPath()
+      ctx.moveTo(x,         y - r)
+      ctx.lineTo(x + r,     y + r * 0.75)
+      ctx.lineTo(x - r,     y + r * 0.75)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+    }
+    else if (seller_cls == "TAKER1" || seller_cls == "TAKER2")  {
+      // Filled triangle pointing down
+      ctx.fillStyle   = cfg.color
+      ctx.strokeStyle = cfg.stroke
+      ctx.lineWidth   = 1 * pr
+      ctx.beginPath()
+      ctx.moveTo(x,         y+r)
+      ctx.lineTo(x + r,     y - r * 0.75)
+      ctx.lineTo(x - r,     y - r * 0.75)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+    }
 
   } else if (cls === 'INFORMED1' || cls === 'TOXIC') {
     // 5-pointed star
@@ -170,8 +185,8 @@ function makePrimitive() {
             const sorted = [..._pts].sort(
               (a, b) => DRAW_ORDER.indexOf(a.cls) - DRAW_ORDER.indexOf(b.cls)
             )
-            for (const { x, y, cls } of sorted) {
-              drawShape(ctx, cls, Math.round(x * hr), Math.round(y * vr), hr)
+            for (const { x, y, cls, buyer_cls, seller_cls } of sorted) {
+              drawShape(ctx, cls, Math.round(x * hr), Math.round(y * vr), hr, buyer_cls, seller_cls)
             }
           })
         }

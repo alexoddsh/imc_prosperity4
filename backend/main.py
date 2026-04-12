@@ -1,3 +1,4 @@
+import platform
 import uuid
 import os
 import asyncio
@@ -10,18 +11,18 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime, timezone
 from core.models import LogFilter, SystemEnum, RunRequest
-from fastapi import FastAPI, BackgroundTasks, HTTPException, UploadFile, Form, File
-from fastapi.middleware.cors import CORSMiddleware
-from supabase import create_client, Client
-from dotenv import load_dotenv
+from fastapi import FastAPI, BackgroundTasks, HTTPException, UploadFile, Form, File #type:ignore
+from fastapi.middleware.cors import CORSMiddleware #type:ignore
+from supabase import create_client, Client #type:ignore
+from dotenv import load_dotenv #type:ignore
 from core.parser import process_results
 from cleanup import cleanup_loop, run_cleanup
 
 env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
-url: str = os.environ.get("SUPABASE_URL")
-key: str = os.environ.get("SUPABASE_KEY")
+url: str = os.environ.get("SUPABASE_URL", "")
+key: str = os.environ.get("SUPABASE_KEY", "")
 dev_name: str = os.environ.get("DEV_NAME", "unknown")
 supabase: Client = create_client(url, key)
 
@@ -62,10 +63,16 @@ def execute_backtest(task_id: str, algo_file: str, round_id: str, year: str):
         env = os.environ.copy()
         env["PYTHONPATH"] = f"{base_path}:{env.get('PYTHONPATH', '')}"
 
-        if year == "4":
-            data_input = "/Users/alexoddsh/prosperity/backend/backtester/resources-4"
-        elif year == "3":
-            data_input = "/Users/alexoddsh/prosperity/backend/backtester/resources-3"
+        if platform.system() == 'Darwin':
+            if year == "4":
+                data_input = "/Users/alexoddsh/prosperity/backend/backtester/resources-4"
+            elif year == "3":
+                data_input = "/Users/alexoddsh/prosperity/backend/backtester/resources-3"
+        else:
+            if year == "4":
+                data_input = "/home/victor/notes/imc_prosperity4/backend/backtester/resources-4"
+            elif year == "3":
+                data_input = "/home/victor/notes/imc_prosperity4/backend/backtester/resources-3"
 
         cmd = [
             sys.executable, "-m", "backtester",
