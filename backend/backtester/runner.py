@@ -351,10 +351,14 @@ def run_backtest(
             with redirect_stdout(stdout):
                 orders, conversions, trader_data = trader.run(state)
 
+        stdout_log = stdout.getvalue().rstrip()
+        if trader_data:
+            stdout_log += f"\n[TRADER_DATA] {trader_data}"
+
         sandbox_row = SandboxLogRow(
             timestamp=timestamp,
             sandbox_log="",
-            lambda_log=stdout.getvalue().rstrip(),
+            lambda_log=stdout_log,
         )
 
         result.sandbox_logs.append(sandbox_row)
@@ -362,6 +366,9 @@ def run_backtest(
         type_check_orders(orders)
         create_activity_logs(state, data, result)
         enforce_limits(state, data, orders, sandbox_row)
+
+        state.own_trades = {}
+        state.market_trades = {}
         match_orders(state, data, orders, result, trade_matching_mode)
 
     return result

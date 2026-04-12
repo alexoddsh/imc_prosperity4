@@ -12,6 +12,12 @@ POSITION_LIMITS = {
 #TECHNICALS
 MA_WINDOW = 10
 
+#INFORMED HARDS
+REVERSE_TRADE_MARGIN = 3
+TOLERANCE = 1
+SUS_VOL = 15
+ORDER_VOL = 20
+
 #SYMBOLS
 Product = Literal["RAINFOREST_RESIN", "KELP", "SQUID_INK"]
 
@@ -49,6 +55,10 @@ class MarketTrader:
                   "sell": [],
                   "buy": []  
                 },
+                "PLACED_ORDERS": {
+                  "asks": {},
+                  "bids": {} 
+                },
                 "WALLMID_DATA": {}
             }
         
@@ -64,6 +74,9 @@ class MarketTrader:
                 "prev_dh_bid": (self.dh_bid, self.dh_bid_vol),
             },
             "ENTERED_TRADES": self.entered_trades,
+            "PLACED_ORDERS": {
+                "asks": {},
+                "bids": {} },
             "WALLMID_DATA": self.incoming_trader_data["WALLMID_DATA"]
         }
         
@@ -78,8 +91,8 @@ class MarketTrader:
     #more than fast enough to clear the 900 ms / run limit but dreadfully slow for sims
 
     def algo_history(self) -> dict[str, dict[str, list[int, int]]]:
-        time = self.state.timestamp
-        if time == 0:
+        time = str(self.state.timestamp)
+        if time == "0":
             entered_trades = {}
             entered_trades["sell"] = []
             entered_trades["buy"] = []
@@ -88,11 +101,64 @@ class MarketTrader:
             if self.product in self.state.own_trades.keys():
                 new_trades = self.state.own_trades[self.product]
                 for trade in new_trades:
-                    if trade.seller == "SUBMISSION":    
-                        entered_trades["sell"].append({time: [trade.quantity, trade.price]})  
-                    elif trade.buyer == "SUBMISSION":
-                        entered_trades["buy"].append({time: [trade.quantity, trade.price]})
-        
+                    is_rev = False
+                    rev_time = None
+
+                    if self.incoming_trader_data["PLACED_ORDERS"]["bids"]:
+                        order = self.incoming_trader_data["PLACED_ORDERS"]["bids"]
+                        if order["is_reverse"] and trade.price == order["price"] and trade.buyer == "SUBMISSION":
+                            is_rev = True
+                            rev_time = order["reversing_timestamp"]
+                    
+                    if self.incoming_trader_data["PLACED_ORDERS"]["asks"]:
+                        order = self.incoming_trader_data["PLACED_ORDERS"]["asks"]
+                        if order["is_reverse"] and trade.price == order["price"] and trade.seller == "SUBMISSION":
+                            is_rev = True
+                            rev_time = order["reversing_timestamp"]
+                    
+                    if trade.buyer == "SUBMISSION":
+                        entered_trades["buy"].append({str(trade.timestamp): 
+                        {
+                            "qty": trade.quantity, 
+                            "price": trade.price, 
+                            "reversed": False, 
+                            "is_reverse": is_rev,
+                            "reversing_timestamp": rev_time
+                        }})  
+
+                    elif trade.seller == "SUBMISSION":    
+                        entered_trades["sell"].append({str(trade.timestamp): 
+                        {
+                            "qty": trade.quantity, 
+                            "price": trade.price, 
+                            "reversed": False, 
+                            "is_reverse": is_rev,
+                            "reversing_timestamp": rev_time
+                        }})  
+
+        if self.incoming_trader_data["PLACED_ORDERS"] and self.state.own_trades.get(self.product, []):
+            if self.incoming_trader_data["PLACED_ORDERS"]["bids"]:
+                order = self.incoming_trader_data["PLACED_ORDERS"]["bids"]
+                if order and order["is_reverse"]:
+                    order_price = order["price"]
+                    for trade in self.state.own_trades[self.product]:
+                        if trade.price == order_price and trade.buyer == "SUBMISSION": #placed reversal order was executed!
+                            for prev_trade_dict in entered_trades["sell"]:
+                                [time] = prev_trade_dict.keys()
+                                if time == order["reversing_timestamp"]:
+                                    prev_trade_dict[time]["reversed"] = True #mark old trade reversed
+                                                                        
+            if self.incoming_trader_data["PLACED_ORDERS"]["asks"]:
+                order = self.incoming_trader_data["PLACED_ORDERS"]["asks"]
+                if order and order["is_reverse"]:
+                    order_price = order["price"]
+                    for trade in self.state.own_trades[self.product]:
+                        if trade.price == order_price and trade.seller == "SUBMISSION": #placed reversal order was executed!
+                            for prev_trade_dict in entered_trades["buy"]:
+                                [time] = prev_trade_dict.keys()
+                                if time == order["reversing_timestamp"]:
+                                    prev_trade_dict[time]["reversed"] = True #mark old trade reversed
+            
         if len(entered_trades["sell"]) > 20:
             del entered_trades["sell"][0]
         
@@ -198,37 +264,60 @@ class InformedTaker(MarketTrader):
 
     def produce_orders(self) -> dict[Product, Order]:
         orders = []
-        sus_vol = 15
-        tolerance = 1
-
+        
         prev_dl_ask, prev_dl_ask_vol = self.incoming_trader_data["INFORMED_DATA"]["prev_dl_ask"]
         prev_dh_bid, prev_dh_bid_vol = self.incoming_trader_data["INFORMED_DATA"]["prev_dh_bid"]
 
-        #take at dh/dl -> note a small specific entered_trades can have multiple trades for each timestamp
-        #but when running this strat specifically we know that it wont
+        #note! entered_trades can have multiple trades per timestamp but for informed we know it doesnt
         if self.product in self.state.market_trades.keys():
             for trade in self.state.market_trades[self.product]:
-                if trade.quantity == sus_vol:
-                    if trade.price - tolerance <= prev_dl_ask: 
-                        self.bid(self.best_ask_price, 20, orders)
+                if trade.quantity == SUS_VOL:
+                    if trade.price - TOLERANCE <= prev_dl_ask: 
+                        print(f"Placing trade because PLDA is {prev_dl_ask} and VOL is {trade.quantity} at {trade.timestamp} now placing new trade at {self.state.timestamp}")
+                        self.bid(self.best_ask_price, ORDER_VOL, orders)
                         
-                    elif trade.price + tolerance >= prev_dh_bid:
-                        self.ask(self.best_bid_price, 20, orders)
-                        
-        #reverse prev false signal trades -> notice we take at spread to escape position
-        if self.best_ask_price + 1 < prev_dl_ask:
-            try: 
-                if self.incoming_trader_data["ENTERED_TRADES"]["sell"][0]: #we only have one l/s at a time!
-                    self.bid(self.best_ask_price, 20, orders)
-            except IndexError:
-                pass
-        elif self.best_bid_price - 1 > prev_dh_bid:
-            try:
-                if self.incoming_trader_data["ENTERED_TRADES"]["buy"][0]:
-                    self.ask(self.best_bid_price, 20, orders)
-            except IndexError:
-                pass
+                    elif trade.price + TOLERANCE >= prev_dh_bid:
+                        self.ask(self.best_bid_price, ORDER_VOL, orders)
+        
+        #reset on false signals
+        if self.entered_trades["sell"]:
+            for prev_trade in self.entered_trades["sell"]:
+                [time] = prev_trade.keys()
+                prev_price = prev_trade[time]["price"]
+                prev_vol = prev_trade[time]["qty"]
             
+                if not prev_trade[time]["reversed"] and not prev_trade[time]["is_reverse"]:
+                    if self.best_bid_price - REVERSE_TRADE_MARGIN > prev_price: #prev sell was a false signal!
+                        print(f"Reversing prev trade since Best Bid is: {self.best_bid_price} and Prev Trade Price is: {prev_price}")
+                        self.bid(self.best_ask_price, prev_vol, orders) #take to exit quickly!
+                        self.outgoing_trader_data["PLACED_ORDERS"]["bids"] = {
+                            "qty": prev_vol, 
+                            "price": self.best_ask_price,
+                            "reversed": False,
+                            "is_reverse": True,
+                            "reversing_timestamp": time
+                        }
+                break
+        
+        if self.entered_trades["buy"]:
+            for prev_trade in self.entered_trades["buy"]:
+                [time] = prev_trade.keys()
+                prev_price = prev_trade[time]["price"]
+                prev_vol = prev_trade[time]["qty"]
+
+                if not prev_trade[time]["reversed"] and not prev_trade[time]["is_reverse"]:
+                    if self.best_ask_price + REVERSE_TRADE_MARGIN < prev_price: #prev buy was a false signal!
+                        print(f"Reversing prev trade since Best Ask is: {self.best_ask_price} and Prev Trade Price is: {prev_price}")
+                        self.ask(self.best_bid_price, prev_vol, orders) #take to exit quickly!
+                        self.outgoing_trader_data["PLACED_ORDERS"]["asks"] = {
+                            "qty": prev_vol, 
+                            "price": self.best_bid_price,
+                            "reversed": False,
+                            "is_reverse": True,
+                            "reversing_timestamp": time
+                        }
+                break
+                                        
         return {self.product: orders}            
 
 class BasicMaker(MarketTrader):

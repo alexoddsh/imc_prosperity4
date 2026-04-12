@@ -179,7 +179,8 @@ async def run_backtest(req: RunRequest, background_tasks: BackgroundTasks):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
 
-    background_tasks.add_task(execute_backtest, task_id, req.algo_file, req.round, req.year)
+    #background_tasks.add_task(execute_backtest, task_id, req.algo_file, req.round, req.year)
+    await asyncio.to_thread(execute_backtest, task_id, req.algo_file, req.round, req.year)
 
     return {"task_id": task_id, "status": "Started"}
 

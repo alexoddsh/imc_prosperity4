@@ -41,10 +41,12 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
             for line in id_lines:
                 if line.startswith("B"): #backtesting log
                     day += 1
-                elif line.strip().startswith("{"):
-                    ied[(i, day)] = line.strip()
-                    i += 1
-            
+                elif line.strip().startswith("[DATA] "):
+                    payload = line.strip().removeprefix("[DATA] ")
+                    if payload.startswith("{"):
+                        ied[(i, day)] = payload
+                        i += 1
+                
             internal = pd.DataFrame(columns=["timestamp", "product", "order_price", "order_quantity"])
             print("  [INTERNAL]: Internal parsing underway")
             success = inter.parse_internal(ied, internal)
@@ -125,8 +127,12 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
         products_sharpes = {}
         for product in products:
             returns = np.diff(prices[prices["product"] == product]["profit_and_loss"].to_numpy())
-            sharpe = np.mean(returns) / np.std(returns)
-            products_sharpes.update({str(product): sharpe})
+            if not returns.all():
+                sharpe = 0.0
+                products_sharpes.update({str(product): sharpe})
+            else:
+                sharpe = np.mean(returns) / np.std(returns)
+                products_sharpes.update({str(product): sharpe})
             
         prices.insert(0, "backtest_id", str(task_id))
         trades.insert(0, "backtest_id", str(task_id))
