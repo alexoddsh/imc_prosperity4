@@ -5,7 +5,7 @@ from datamodel import TradingState, Order
 #POSITION LIMITS
 POSITION_LIMITS = {
     "RAINFOREST_RESIN": 50,
-    "KELP": 50,
+    "KELP": 80,
     "SQUID_INK": 50
 }
 

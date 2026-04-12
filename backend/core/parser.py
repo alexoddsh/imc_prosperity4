@@ -75,8 +75,10 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
             i = 0 #just acts like a fake index kinda
 
             for entry in ied:
-                raw_logs[(i, day)] = entry["lambdaLog"]
-                i += 1
+                payload = entry.get("lambdaLog", "")
+                if payload and payload.strip().startswith("{"):
+                    raw_logs[(i, day)] = payload
+                    i += 1
             
             internal = pd.DataFrame(columns=["timestamp", "product", "order_price", "order_quantity"])
             print("  [INTERNAL]: Internal parsing underway")

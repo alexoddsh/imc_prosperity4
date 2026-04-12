@@ -6,7 +6,12 @@ def parse_internal(raw_logs: dict, intdf: pd.DataFrame) -> bool:
 
     try:
         for (i, day), row in raw_logs.items():
-            sandbox = json.loads(row)            
+            if not row or not row.strip().startswith("{"):
+                continue
+            try:
+                sandbox = json.loads(row)
+            except json.JSONDecodeError:
+                continue
             sandbox_day_keyed = {(day, key): value for key, value in sandbox.items()}
 
             for (day, timestamp), data_list, in sandbox_day_keyed.items():
