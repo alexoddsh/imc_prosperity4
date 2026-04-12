@@ -131,7 +131,7 @@ def run_single(year: int, round_id: str, combo_params: dict, before: str, after:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        cwd=str(ALGOS_DIR),
+        cwd=str(ALGOS_DIR.parent),
         env=env,
     )
     duration = time.time() - t0
@@ -174,7 +174,8 @@ def main():
     parser.add_argument("--output", type=str, default="", help="Custom output CSV path")
     args = parser.parse_args()
 
-    config = load_config(args.config)
+    config_path = Path(__file__).parent.joinpath(f"configs/{args.config.split("/")[-1] if "/" in args.config else args.config}") 
+    config = load_config(config_path.__str__())
     algo_file = config["algo_file"]
     round_id = str(config["round"])
     year = str(config["year"])
@@ -202,7 +203,7 @@ def main():
     total_runs = len(all_combos)
 
     if args.output:
-        out_path = Path(args.output)
+        out_path = Path(__file__).parent.joinpath(f"results/{args.output.split("/")[-1] if "/" in args.output else args.output}")
     else:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         out_dir = Path(__file__).resolve().parent / "results"
