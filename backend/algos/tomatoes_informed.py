@@ -3,10 +3,29 @@ from dataclasses import dataclass, field
 from typing import Literal
 from datamodel import TradingState, Order
 
-POSITION_LIMITS = {"EMERALDS": 80, "TOMATOES": 80}
+POSITION_LIMITS = {"INTARIAN_PEPPER_ROOT": 180, "ASH_COATED_OSMIUM": 180}
+
 TOLERANCE = 2
 SUSVOL = 6
-Product = Literal["EMERALDS", "TOMATOES"]
+
+UNWIND_THRESHOLD_LONG = 10
+UNWIND_THRESHOLD_SHORT = -10
+TAKE_PROFIT_LONG = 20
+TAKE_PROFIT_SHORT = -20
+PRICE_OFFSET_ASK = 1
+PRICE_OFFSET_BID = 1
+
+ASK_SKEW1 = -1
+ASK_SKEW2 = -2
+BID_SKEW1 = 1
+BID_SKEW2 = 2
+ASK_SKEW_LEVEL2 = 65
+ASK_SKEW_LEVEL1 = 50
+BID_SKEW_LEVEL2 = -65
+BID_SKEW_LEVEL1 = -50
+
+
+Product = Literal["INTARIAN_PEPPER_ROOT", "ASK_COATED_OSMIUM"]
 
 @dataclass
 class AlgoTrade:
@@ -27,6 +46,9 @@ class PlacedOrder:
 @dataclass 
 class InformedData:
     dh_ask_price: int = 0
+    short_triggered: bool = False
+    short_triggered_at: int = 0
+    market_make: bool = True
  
 @dataclass 
 class TraderData:
@@ -40,14 +62,18 @@ class MarketTrader:
         self.product = product 
         self.state = state 
         self.trader_data = self.get_trader_data()
+        self.append_algo_trades()
 
         self.position_limit = POSITION_LIMITS.get(self.product.upper(), 0)
         self.current_position = self.state.position.get(self.product.upper(), 0) 
 
+        self.buy_orders, self.sell_orders = self.get_order_depths()
+        self.has_book = bool(self.buy_orders) and bool(self.sell_orders)
+        if not self.has_book:
+            return
+
         self.best_bid_price, self.best_bid_volume = self.get_best_bid()
         self.best_ask_price, self.best_ask_volume = self.get_best_ask()
-        self.buy_orders, self.sell_orders = self.get_order_depths()
-        
         self.wall_mid = self.compute_wallmid()
         self.optimized_wallmid = self.compute_optimized_wallmid()
     
@@ -79,12 +105,10 @@ class MarketTrader:
         orders.append(Order(self.product, sp, int(-abs(sv))))
             
     def get_best_bid(self) -> tuple[int, int]:
-        bbp, bbv = next(iter(self.state.order_depths[self.product].buy_orders.items()))
-        return bbp, bbv
-    
+        return next(iter(self.buy_orders.items()))
+
     def get_best_ask(self) -> tuple[int, int]:
-        bap, bav = next(iter(self.state.order_depths[self.product].sell_orders.items()))
-        return bap, bav #note BAV is negative
+        return next(iter(self.sell_orders.items())) #note volume is negative
     
     def get_order_depths(self) -> tuple[dict[int, int], dict[int, int]]:
         depth = self.state.order_depths[self.product]
@@ -111,43 +135,107 @@ class MarketTrader:
         return fv
 
 
-class InformedTaker(MarketTrader):
+class InformedMaker(MarketTrader):
     def __init__(self, product, state):
         super().__init__(product, state)
 
     def produce_orders(self) -> dict[Product, Order]:
         orders = []
+        if not self.has_book:
+            return {self.product: orders}
 
-        #IF sus trade detected we act on it
-        for trade in self.state.market_trades.get(self.product, []):
-            if trade.quantity == SUSVOL:
-                self.ask(self.best_bid_price, 80, orders)
-                self.trader_data.placed_orders.append(PlacedOrder(
-                    timestamp=str(self.state.timestamp),
-                    quantity=80,
-                    price=self.best_bid_price,
-                    buyer="",
-                    seller="SUBMISSION"
-                ))
-        
-        #IF only a small fill the first time we need to act again until position is full SHORT
-        current_pos = self.state.position.get(self.product, 0)
-        achieved_short = 0 
+        #business as usual
+        if self.trader_data.informed_data.market_make:
+            # TAKING ALL PROFITABLE
+            if self.current_position < TAKE_PROFIT_LONG:
+                for sp, sv in self.sell_orders.items():
+                    if int(sp) < self.optimized_wallmid:
+                        self.bid(sp, sv, orders)
+            
+            if self.current_position > TAKE_PROFIT_SHORT:
+                for bp, bv in self.buy_orders.items():
+                    if int(bp) > self.optimized_wallmid:
+                        self.ask(bp, bv, orders)
 
-        for algotrade in self.trader_data.algo_trades:
-             achieved_short += algotrade.quantity if algotrade.seller == "SUBMISSION" else 0
+            #ACTIVE UNWINDING AT EDGE = 0
+            if self.current_position > UNWIND_THRESHOLD_LONG:
+                for bp, bv in self.buy_orders.items():
+                    if int(bp) >= int(self.optimized_wallmid):
+                        self.ask(bp, bv, orders)
+
+            elif self.current_position < UNWIND_THRESHOLD_SHORT:
+                for sp, sv in self.sell_orders.items():
+                    if int(sp) <= int(self.optimized_wallmid):
+                        self.bid(sp, sv, orders)
+
+            ##MAKING MARKET
+            skew_rate = self.current_position / self.position_limit 
+            match self.current_position:
+                    case s if s > ASK_SKEW_LEVEL2:
+                        ask_skew = ASK_SKEW2 #decrease ask to sell more
+                    case s if s > ASK_SKEW_LEVEL1:
+                        ask_skew = ASK_SKEW1
+                    case _:
+                        ask_skew = 0
+
+            match self.current_position:
+                case s if s < BID_SKEW_LEVEL2:
+                    bid_skew = BID_SKEW2 #increase bid to buy more
+                case s if s < BID_SKEW_LEVEL1:
+                    bid_skew = BID_SKEW1
+                case _:
+                    bid_skew = 0
         
-        remaining_short = 80 + current_pos - achieved_short
-        if remaining_short > 0:
-            self.ask(self.best_bid_price, remaining_short, orders)
-            self.trader_data.placed_orders.append(PlacedOrder(
-                timestamp=str(self.state.timestamp),
-                quantity=remaining_short,
-                price=self.best_bid_price,
-                buyer="",
-                seller="SUBMISSION"
-            ))
-                            
+            ask_price = self.best_ask_price - PRICE_OFFSET_ASK + ask_skew
+            bid_price = self.best_bid_price + PRICE_OFFSET_BID + bid_skew
+            ask_price = max(ask_price, int(self.optimized_wallmid)) 
+            bid_price = min(bid_price, int(self.optimized_wallmid))
+                
+            if int(self.best_ask_price - 1) > self.optimized_wallmid:
+                vol_order = (self.position_limit - abs(self.current_position) / 2) * (1+skew_rate)
+                self.ask(ask_price, vol_order, orders)
+            
+            if int(self.best_bid_price + 1) < self.optimized_wallmid:
+                vol_order = (self.position_limit - abs(self.current_position) / 2) * (1-skew_rate)
+                self.bid(bid_price, vol_order, orders)
+            
+            #IF sus trade detected we act on it and stop market making
+            for trade in self.state.market_trades.get(self.product, []):
+                if trade.quantity == SUSVOL:
+                    self.ask(self.best_bid_price, 80, orders)
+                    self.trader_data.informed_data.short_triggered = True
+                    self.trader_data.informed_data.market_make = False
+                    self.trader_data.informed_data.short_triggered_at = self.state.timestamp
+                    """self.trader_data.placed_orders.append(PlacedOrder(
+                        timestamp=str(self.state.timestamp),
+                        quantity=80,
+                        price=self.best_bid_price,
+                        buyer="",
+                        seller="SUBMISSION"
+                    ))"""
+        
+        #shorting period
+        elif not self.trader_data.informed_data.market_make:        
+            #Short period has ended take profit
+            if self.trader_data.informed_data.short_triggered:
+                if self.trader_data.informed_data.short_triggered_at == self.state.timestamp-100000:
+                    self.trader_data.informed_data.market_make = True
+        
+            #IF only a small fill the first time we need to act again until position is full SHORT
+            if self.trader_data.informed_data.short_triggered:
+                current_pos = self.state.position.get(self.product, 0)
+
+                if current_pos > -POSITION_LIMITS["ASH_COATED_OSMIUM"]:
+                    remaining_short = POSITION_LIMITS["ASH_COATED_OSMIUM"] + current_pos
+                    self.ask(self.best_bid_price, remaining_short, orders)
+                    """self.trader_data.placed_orders.append(PlacedOrder(
+                        timestamp=str(self.state.timestamp),
+                        quantity=remaining_short,
+                        price=self.best_bid_price,
+                        buyer="",
+                        seller="SUBMISSION"
+                    ))"""
+        
         return {self.product: orders}
 
 
@@ -157,7 +245,9 @@ class BasicMaker(MarketTrader):
 
     def produce_orders(self) -> dict[Product, Order]:
         orders = []
-        
+        if not self.has_book:
+            return {self.product: orders}
+
         # TAKING ALL PROFITABLE
         for sp, sv in self.sell_orders.items():
             if int(sp) < self.wall_mid:
@@ -195,8 +285,8 @@ class Trader:
         outgoing = {}
 
         traders = {
-            "TOMATOES": InformedTaker,
-            "EMERALDS": BasicMaker
+            "ASH_COATED_OSMIUM": InformedMaker,
+            "INTARIAN_PEPPER_ROOT": BasicMaker
         }
         for product, TraderClass in traders.items():
             trader_instance = TraderClass(product, state)

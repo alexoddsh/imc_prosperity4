@@ -120,10 +120,11 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
         days = range(1, len(prices["day"].unique())+1)
         if system == SystemEnum.PROSPERITY4TBX:
             for product in products:
+                pnl = 0
                 for day in days:
                     day_pnl = prices[(prices["timestamp"] == (day*1000000)-100) & (prices["product"] == product)]["profit_and_loss"].item()
-                    pnl =+ day_pnl
-                
+                    pnl += day_pnl
+
                 final_pnl += pnl
                 products_pnls.update({str(product): pnl})
                 
