@@ -118,7 +118,7 @@ def run_single(year: int, round_id: str, combo_params: dict, before: str, after:
         str(TMP_ALGO),
         round_id,
         "--data", data_input,
-        "--no-progress"
+        "--no-progress",
         "--out", str(TMP_LOG),
     ]
 

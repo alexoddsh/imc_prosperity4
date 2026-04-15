@@ -65,6 +65,27 @@ def type_check_orders(orders: dict[Symbol, list[Order]]) -> None:
                 raise ValueError(f"Order quantity of '{order}' is of type {type(order.quantity)}, expected an int")
 
 
+_last_valid_mid: dict[Symbol, float] = {}
+
+
+def _mark_price(product: Symbol, row) -> float:
+    mid = row.mid_price
+    if mid and mid == mid:  # non-zero, non-NaN
+        _last_valid_mid[product] = mid
+        return mid
+    if row.bid_prices and row.ask_prices:
+        fallback = (row.bid_prices[0] + row.ask_prices[0]) / 2
+    elif row.bid_prices:
+        fallback = float(row.bid_prices[0])
+    elif row.ask_prices:
+        fallback = float(row.ask_prices[0])
+    else:
+        fallback = _last_valid_mid.get(product, 0.0)
+    if fallback:
+        _last_valid_mid[product] = fallback
+    return _last_valid_mid.get(product, 0.0)
+
+
 def create_activity_logs(
     state: TradingState,
     data: BacktestData,
@@ -76,8 +97,9 @@ def create_activity_logs(
         product_profit_loss = data.profit_loss[product]
 
         position = state.position.get(product, 0)
+        mark = _mark_price(product, row)
         if position != 0:
-            product_profit_loss += position * row.mid_price
+            product_profit_loss += position * mark
 
         bid_prices_len = len(row.bid_prices)
         bid_volumes_len = len(row.bid_volumes)

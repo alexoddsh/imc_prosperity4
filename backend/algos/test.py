@@ -1,6 +1,5 @@
-from datamodel import OrderDepth, UserId, TradingState, Order
+from datamodel import TradingState, Order
 from typing import List, Dict
-import string
 
 # --- GRID PARAMS ---
 BEDY = 0
@@ -10,10 +9,10 @@ PRICKEN = 0
 class Trader:
     def run(self, state: TradingState):
 
-        curr_pos = state.position.get("ASH_COATED_OSMIUM", 0)
+        curr_pos = state.position.get("INTARIAN_PEPPER_ROOT", 0)
         max_buy = 80-curr_pos
         max_sell = -(80+curr_pos)
-        order_book = state.order_depths["ASH_COATED_OSMIUM"]
+        order_book = state.order_depths["INTARIAN_PEPPER_ROOT"]
 
         bids: Dict = order_book.buy_orders
         asks: Dict = order_book.sell_orders
@@ -33,7 +32,7 @@ class Trader:
 
         if best_bid_price > wall_mid or best_ask_price < wall_mid:
             if best_bid_price > wall_mid:
-                orders.append(Order("ASH_COATED_OSMIUM", best_bid_price, -best_bid_qty))
+                orders.append(Order("INTARIAN_PEPPER_ROOT", best_bid_price, -best_bid_qty))
                 max_sell += best_bid_qty
                 ##find second best level
                 bids.pop(best_bid_price)

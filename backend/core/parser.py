@@ -130,7 +130,7 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
                 
         elif system == SystemEnum.PROSPERITY:
             for product in products:
-                pnl = prices[(prices["timestamp"] == 199900) & (prices["product"] == product)]["profit_and_loss"].item()
+                pnl = prices[(prices["timestamp"] == 99900) & (prices["product"] == product)]["profit_and_loss"].item()
                 products_pnls.update({str(product): pnl})
                 final_pnl += pnl
         

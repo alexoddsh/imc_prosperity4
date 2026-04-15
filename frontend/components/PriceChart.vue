@@ -303,7 +303,7 @@ function makeAlgoObPrimitive() {
   }
 }
 
-function makeDayLinePrimitive() {
+function makeDayLinePrimitive(maxTime) {
   let _chart = null
   const _view = {
     renderer() {
@@ -311,16 +311,18 @@ function makeDayLinePrimitive() {
         draw(target) {
           if (!_chart) return
           target.useBitmapCoordinateSpace(({ context: ctx, horizontalPixelRatio: hr, bitmapSize }) => {
-            const x = _chart.timeScale().timeToCoordinate(1000000)
-            if (x == null) return
             ctx.save()
             ctx.strokeStyle = '#aaaaaa'
             ctx.lineWidth = 1.5 * hr
             ctx.setLineDash([5 * hr, 4 * hr])
-            ctx.beginPath()
-            ctx.moveTo(Math.round(x * hr) + 0.5, 0)
-            ctx.lineTo(Math.round(x * hr) + 0.5, bitmapSize.height)
-            ctx.stroke()
+            for (let t = 1000000; t <= maxTime; t += 1000000) {
+              const x = _chart.timeScale().timeToCoordinate(t)
+              if (x == null) continue
+              ctx.beginPath()
+              ctx.moveTo(Math.round(x * hr) + 0.5, 0)
+              ctx.lineTo(Math.round(x * hr) + 0.5, bitmapSize.height)
+              ctx.stroke()
+            }
             ctx.restore()
           })
         }
@@ -470,7 +472,7 @@ const renderChart = (priceRaw, tradeData, internalData) => {
   primitive = makePrimitive()
   if (series.Ask) {
     series.Ask.attachPrimitive(primitive)
-    dayLinePrim = makeDayLinePrimitive()
+    dayLinePrim = makeDayLinePrimitive(prc.length ? prc[prc.length - 1].timestamp : 0)
     series.Ask.attachPrimitive(dayLinePrim)
   }
 

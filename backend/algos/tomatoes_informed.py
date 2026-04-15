@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 from datamodel import TradingState, Order
 
-POSITION_LIMITS = {"INTARIAN_PEPPER_ROOT": 180, "ASH_COATED_OSMIUM": 180}
+POSITION_LIMITS = {"INTARIAN_PEPPER_ROOT": 80, "ASH_COATED_OSMIUM": 80}
 
 TOLERANCE = 2
 SUSVOL = 6
@@ -93,6 +93,9 @@ class MarketTrader:
                     buyer="SUBMISSION" if trade.buyer == "SUBMISSION" else "",
                     seller="SUBMISSION" if trade.seller == "SUBMISSION" else ""
                 ))
+        
+        if len(self.trader_data.algo_trades) > 20:
+            self.trader_data.algo_trades = self.trader_data.algo_trades[-20:]
 
     def bid(self, bp, bv, orders) -> None:
         if int(bv) == 0: 

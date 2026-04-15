@@ -129,7 +129,7 @@ def compute_wallmid_ma(product: str, pdf: pd.DataFrame) -> bool:
     if not mask.any():
         raise ValueError(f"  [WALLMIDSMA]: No trades found in PDF for {product}")    
     try:
-        pdf.loc[mask, "wallmidsma"] = pdf.loc[mask, "wallmid2"].rolling(window=10).mean()
+        pdf.loc[mask, "wallmidsma"] = pdf.loc[mask, "wallmid3"].rolling(window=5).mean()
         return True
     except Exception as e:
         print(f"  [WALLMIDMA]: An error occured: {e}")

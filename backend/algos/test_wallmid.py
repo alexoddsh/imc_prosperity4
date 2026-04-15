@@ -6,18 +6,18 @@ class Trader:
         result = {}
         orders = []
 
-        od = state.order_depths["TOMATOES"]
+        od = state.order_depths["INTARIAN_PEPPER_ROOT"]
         
         # Check if we've already traded
-        already_traded = "TOMATOES" in state.own_trades and len(state.own_trades["TOMATOES"]) > 0
+        already_traded = "INTARIAN_PEPPER_ROOT" in state.own_trades and len(state.own_trades["INTARIAN_PEPPER_ROOT"]) > 0
 
         if not already_traded:
             # Hit the best ask to guarantee a fill
             bap = min(od.sell_orders.keys())
             bav = od.sell_orders[bap]  # negative quantity
-            orders.append(Order("TOMATOES", bap, -bav))  # flip sign to buy
+            orders.append(Order("INTARIAN_PEPPER_ROOT", bap, -bav))  # flip sign to buy
 
-        result["TOMATOES"] = orders
+        result["INTARIAN_PEPPER_ROOT"] = orders
         conversions = 0
         traderData = ""
 
