@@ -209,7 +209,7 @@ class BasicMaker(MarketTrader):
 
         if self.current_position < IPR_MIN_LONG: 
             allowed_short = 0 
-
+        
         # TAKING ALL PROFITABLE
         for sp, sv in self.sell_orders.items():
             if int(sp) < self.wall_mid:
@@ -227,7 +227,9 @@ class BasicMaker(MarketTrader):
         ask_price = self.best_ask_price
         ask_price = max(ask_price, int(self.wall_mid)) 
 
-        if self.current_position < IPR_MIN_LONG:
+        if self.current_position < IPR_MIN_LONG and self.state.timestamp < 20000:
+            bid_price = self.best_ask_price #start off agressive to build position
+        elif self.current_position < IPR_MIN_LONG:
             bid_price = self.best_bid_price + 2
         else:
             bid_price = self.best_bid_price + 1
