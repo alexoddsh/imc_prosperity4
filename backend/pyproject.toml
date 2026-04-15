@@ -55,6 +55,7 @@ dependencies = [
     "psycopg2-binary==2.9.11",
     "ptyprocess==0.7.0",
     "pure-eval==0.2.3",
+    "pycognito>=2024.5.1",
     "pycparser==3.0",
     "pydantic==2.12.5",
     "pydantic-core==2.41.5",

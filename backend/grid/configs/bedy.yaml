@@ -1,0 +1,8 @@
+algo_file: test.py
+round: "1"
+year: "4"
+products: ["ASH_COATED_OSMIUM", "INTARIAN_PEPPER_ROOT"]
+
+params:
+  BEDY: [1, 2]
+  PRICKEN: [3, 4]

@@ -128,5 +128,5 @@ if __name__ == "__main__":
         os.getenv("BROWSER_BINARY_LOCATION", ""), 
         os.getenv("IMC_EMAIL", ""), 
         os.getenv("IMC_PASS", ""),
-        files=["test-algo.py", "test-algo.py"]
+        files=["test.py", "test.py"]
     )
