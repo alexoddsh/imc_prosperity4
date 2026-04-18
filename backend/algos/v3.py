@@ -203,7 +203,6 @@ class MarketTrader:
             if abs(computed_regwall_slope_a - computed_regwall_slope_b) < IPR_REGWALL_SAFETY_SLOPE:
                 if abs(self.regwall - computed_regwall) < IPR_REGWALL_SAFETY_MARGIN: return False #OK
                 else:
-                    print(f"NEW REG: {computed_regwall_intercept, computed_regwall}")
                     return computed_regwall, avg_slope #not ok return new regwall we are certain about new SLOPE
             else:
                 return computed_regwall, None #very bad slopes do not match algo is stale  
