@@ -1,5 +1,3 @@
-from tkinter import Grid
-from PIL.ImageStat import Global
 import os, sys, csv, time, random, argparse, subprocess, itertools
 import yaml
 from pathlib import Path
@@ -161,7 +159,7 @@ def tryAuthenticatedRequest(url: str, method: ReqMethod, headers: Dict, refresh_
         if res.status_code == 401:
             raise ExpiredToken(res.reason_phrase)
     
-    elif res.status_code not in [200, 201]:
+    elif res.status_code not in [200, 201, 429]:
         raise UnexpectedAwsResponse(res)
     
     return res
@@ -277,6 +275,7 @@ def main(email: str, password: str):
                         refresh_callback=get_cognito_token,
                     )
                     aws_bucket_url = bucket_url_res.json()["data"]["url"]
+                    print(f"aws buck url: {aws_bucket_url}")
                     download_file(aws_bucket_url, f"{sub_id}.zip")
 
                     zip_proc = subprocess.run(["unzip", "-p", f"{sub_id}.zip", "*.log"], capture_output=True, check=True)
