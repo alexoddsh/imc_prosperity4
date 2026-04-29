@@ -9,6 +9,7 @@
           :indicators="selectedInd"
           :normalize="normBy"
           :activeCategories="activeCategories"
+          :activeTraders="activeTraders"
           :qtyRange="qtyRange"
           :obLevels="obLevels"
           :showAlgoOb="showAlgoOb"
@@ -130,6 +131,29 @@
         </div>
       </div>
 
+      <div v-if="availableTraders.length">
+        <span class="sl">trader ids ({{ selectedTraders.length }}/{{ availableTraders.length }})</span>
+        <div class="ind-dropdown">
+          <div class="raw-select ind-trigger" @click="traderOpen = !traderOpen">
+            {{ selectedTraders.length === availableTraders.length
+                ? 'all'
+                : (selectedTraders.length ? selectedTraders.join(', ') : 'none') }}
+          </div>
+          <div v-if="traderOpen" class="ind-options">
+            <label style="border-bottom:1px solid #eee; padding-bottom:3px; margin-bottom:2px;">
+              <input
+                type="checkbox"
+                :checked="selectedTraders.length === availableTraders.length"
+                @change="toggleAllTraders"
+              > all
+            </label>
+            <label v-for="t in availableTraders" :key="t">
+              <input type="checkbox" :value="t" v-model="selectedTraders"> {{ t }}
+            </label>
+          </div>
+        </div>
+      </div>
+
       <div>
         <span class="sl">qty filter</span>
         <div style="display:flex; gap:4px; align-items:center;">
@@ -186,7 +210,7 @@ const { fetchAll } = useFetchAll()
 const activeTaskId = ref(route.query.taskId || '')
 const isRunning = ref(false)
 const algoName = ref('version.py')
-const roundId = ref('2')
+const roundId = ref('5')
 const recentRuns = ref([])
 const availableProducts = ref([])
 const availableDays = ref([])
@@ -235,6 +259,33 @@ const categories = ref([
 ])
 
 const activeCategories = computed(() => categories.value.filter(c => c.active).map(c => c.name))
+
+const traderOpen = ref(false)
+const selectedTraders = ref([])
+const availableTraders = computed(() => {
+  if (!tradeData.value) return []
+  const ids = new Set()
+  for (const t of tradeData.value) {
+    if (t.buyer  && t.buyer  !== 'SUBMISSION') ids.add(t.buyer)
+    if (t.seller && t.seller !== 'SUBMISSION') ids.add(t.seller)
+  }
+  return [...ids].sort()
+})
+// Auto-include any newly observed trader so adding markets/days doesn't silently hide trades.
+watch(availableTraders, (cur, prev) => {
+  const prevSet = new Set(prev ?? [])
+  const added = cur.filter(t => !prevSet.has(t))
+  if (added.length) selectedTraders.value = [...new Set([...selectedTraders.value, ...added])]
+  selectedTraders.value = selectedTraders.value.filter(t => cur.includes(t))
+}, { immediate: true })
+const toggleAllTraders = () => {
+  selectedTraders.value = selectedTraders.value.length === availableTraders.value.length
+    ? []
+    : [...availableTraders.value]
+}
+const activeTraders = computed(() =>
+  selectedTraders.value.length === availableTraders.value.length ? null : selectedTraders.value
+)
 
 const loadRecentRuns = async () => {
   const { data } = await supabase.from('backtest_runs')

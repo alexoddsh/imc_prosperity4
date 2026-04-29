@@ -2,8 +2,15 @@
   <div style="padding: 16px; font-family: 'IBM Plex Mono', monospace; font-size: 12px;">
     <h2 style="margin: 0 0 12px; font-size: 14px; font-weight: 600;">leaderboard</h2>
 
-    <div style="margin-bottom: 8px; color: #999;">
-      sorted by total pnl — {{ runs.length }} runs
+    <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 12px;">
+      <label style="color: #999;">round:</label>
+      <select
+        v-model="selectedRound"
+        style="font-family: inherit; font-size: 12px; padding: 2px 6px; border: 1px solid #ccc; background: #fff;"
+      >
+        <option v-for="r in availableRounds" :key="r" :value="r">{{ r }}</option>
+      </select>
+      <span style="color: #999;">sorted by total pnl — {{ filteredRuns.length }} runs</span>
     </div>
 
     <!-- tooltip -->
@@ -136,6 +143,7 @@ import { ref, computed, onMounted } from 'vue'
 
 const supabase = useSupabaseClient()
 const runs = ref([])
+const selectedRound = ref(null)
 
 const tooltip = ref({ run: null, x: 0, y: 0 })
 const showTooltip = (e, run) => { tooltip.value = { run, x: e.clientX, y: e.clientY } }
@@ -148,20 +156,32 @@ onMounted(async () => {
     .select('id, algo_name, dev, round_id, status, total_pnl, products_pnl, products_sharpes, created_at')
     .neq('status', 'FAILED')
     .order('created_at', { ascending: false })
-  if (data) runs.value = data
+  if (data) {
+    runs.value = data
+    const rounds = [...new Set(data.map(r => r.round_id).filter(r => r != null))].sort((a, b) => b - a)
+    if (rounds.length) selectedRound.value = rounds[0]
+  }
 })
 
+const availableRounds = computed(() =>
+  [...new Set(runs.value.map(r => r.round_id).filter(r => r != null))].sort((a, b) => b - a)
+)
+
+const filteredRuns = computed(() =>
+  runs.value.filter(r => r.round_id === selectedRound.value)
+)
+
 const sortedRuns = computed(() =>
-  [...runs.value]
+  [...filteredRuns.value]
     .filter(r => r.total_pnl != null)
     .sort((a, b) => b.total_pnl - a.total_pnl)
-    .concat(runs.value.filter(r => r.total_pnl == null))
+    .concat(filteredRuns.value.filter(r => r.total_pnl == null))
     .slice(0, 20)
 )
 
 const products = computed(() => {
   const seen = new Set()
-  for (const run of runs.value) {
+  for (const run of filteredRuns.value) {
     const pnls = run.products_pnl
     if (pnls && typeof pnls === 'object') {
       for (const k of Object.keys(pnls)) seen.add(k)
@@ -171,7 +191,7 @@ const products = computed(() => {
 })
 
 const top5 = (product) =>
-  runs.value
+  filteredRuns.value
     .filter(r => r.products_pnl && r.products_pnl[product] != null)
     .map(r => ({ id: r.id, algo_name: r.algo_name, pnl: r.products_pnl[product] }))
     .sort((a, b) => b.pnl - a.pnl)

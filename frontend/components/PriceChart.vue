@@ -7,7 +7,7 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 
-const props = defineProps(['taskId', 'product', 'day', 'indicators', 'normalize', 'activeCategories', 'qtyRange', 'obLevels', 'showAlgoOb', 'priceData', 'tradeData', 'internalData'])
+const props = defineProps(['taskId', 'product', 'day', 'indicators', 'normalize', 'activeCategories', 'activeTraders', 'qtyRange', 'obLevels', 'showAlgoOb', 'priceData', 'tradeData', 'internalData'])
 const emit = defineEmits(['obSnapshot'])
 const { subscribe, broadcast, broadcastHover } = useChartSync()
 
@@ -36,9 +36,11 @@ function badgeHtml(cls) {
 
 function showTooltip(pt, x, y) {
   if (!tooltipEl.value) return
-  const { buyer_cls, seller_cls, qty, price } = pt
+  const { buyer_cls, seller_cls, buyer, seller, qty, price } = pt
+  const sName = seller ? `<span style="color:#444;margin-left:3px;">${seller}</span>` : ''
+  const bName = buyer  ? `<span style="color:#444;margin-left:3px;">${buyer}</span>`  : ''
   tooltipEl.value.innerHTML =
-    `S:${badgeHtml(seller_cls)} ${qty}@${price} B:${badgeHtml(buyer_cls)}`
+    `S:${badgeHtml(seller_cls)}${sName} ${qty}@${price} B:${badgeHtml(buyer_cls)}${bName}`
   tooltipEl.value.style.display = 'block'
   const rect = el.value.getBoundingClientRect()
   const tw = tooltipEl.value.offsetWidth
@@ -172,8 +174,9 @@ function makePrimitive() {
   let _request  = null
   let _trades   = []
   let _active   = new Set()
+  let _traders  = null  // null = no trader filter, Set = only show trades where buyer or seller is in set
   let _qtyRange = [0, Infinity]
-  let _pts      = []   // pre-computed [{x,y,cls,buyer_cls,seller_cls,qty,price}]
+  let _pts      = []   // pre-computed [{x,y,cls,buyer_cls,seller_cls,buyer,seller,qty,price}]
 
   const _view = {
     renderer() {
@@ -211,16 +214,18 @@ function makePrimitive() {
       for (const t of _trades) {
         if (!_active.has(t.cls)) continue
         if (t.qty < qMin || t.qty > qMax) continue
+        if (_traders && !_traders.has(t.side === 'buyer' ? t.buyer : t.seller)) continue
         const x = ts.timeToCoordinate(t.time)
         const y = _series.priceToCoordinate(t.price)
         if (x == null || y == null) continue
-        _pts.push({ x, y, cls: t.cls, buyer_cls: t.buyer_cls, seller_cls: t.seller_cls, qty: t.qty, price: t.price })
+        _pts.push({ x, y, cls: t.cls, buyer_cls: t.buyer_cls, seller_cls: t.seller_cls, buyer: t.buyer, seller: t.seller, qty: t.qty, price: t.price })
       }
     },
-    setData(trades, active, qtyRange) {
+    setData(trades, active, qtyRange, traders) {
       _trades   = trades
       _active   = new Set(active)
       _qtyRange = qtyRange ?? [0, Infinity]
+      _traders  = traders ? new Set(traders) : null
       _request?.()
     },
     findNearest(x, y, threshold = 14) {
@@ -363,7 +368,7 @@ const clearSeries = () => {
 }
 
 const pushMarkers = () => {
-  primitive?.setData(rawTrades, props.activeCategories ?? [], props.qtyRange ?? [0, Infinity])
+  primitive?.setData(rawTrades, props.activeCategories ?? [], props.qtyRange ?? [0, Infinity], props.activeTraders)
 }
 
 const pushAlgoOb = () => {
@@ -494,8 +499,8 @@ const renderChart = (priceRaw, tradeData, internalData) => {
         ref = match._ref
       }
       const price = t.price - ref
-      ;[t.buyer_class, t.seller_class].forEach(cls => {
-        if (CAT_CFG[cls]) rawTrades.push({ time: t.timestamp, price, cls, qty: t.quantity, buyer_cls: t.buyer_class, seller_cls: t.seller_class })
+      ;[['buyer', t.buyer_class], ['seller', t.seller_class]].forEach(([side, cls]) => {
+        if (CAT_CFG[cls]) rawTrades.push({ time: t.timestamp, price, cls, qty: t.quantity, buyer_cls: t.buyer_class, seller_cls: t.seller_class, buyer: t.buyer, seller: t.seller, side })
       })
     })
     pushMarkers()
@@ -528,7 +533,7 @@ const renderFromProps = () => {
 
 watch([() => props.priceData, () => props.tradeData, () => props.internalData], renderFromProps)
 watch([() => props.indicators, () => props.normalize, () => props.obLevels], () => renderChart(cachedPriceRaw, cachedTradeData, cachedInternalData), { deep: true })
-watch([() => props.activeCategories, () => props.qtyRange], pushMarkers, { deep: true })
+watch([() => props.activeCategories, () => props.qtyRange, () => props.activeTraders], pushMarkers, { deep: true })
 watch(() => props.showAlgoOb, pushAlgoOb)
 
 onMounted(async () => {
