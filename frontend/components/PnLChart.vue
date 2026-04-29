@@ -23,14 +23,21 @@ const render = () => {
   let chartPoints = []
   
   if (props.day === 'all') {
-    const minDay = Math.min(...rawData.map(d => d.day))
-    const firstDayPoints = rawData.filter(d => d.day === minDay)
-    const offset = firstDayPoints.length > 0 ? firstDayPoints[firstDayPoints.length - 1].profit_and_loss : 0
+    const days = [...new Set(rawData.map(d => d.day))].sort((a, b) => a - b)
+    const cumulativeOffset = {}
+    let runningOffset = 0
+    for (let i = 0; i < days.length; i++) {
+      cumulativeOffset[days[i]] = runningOffset
+      const dayPoints = rawData.filter(d => d.day === days[i])
+      if (dayPoints.length > 0) {
+        runningOffset += dayPoints[dayPoints.length - 1].profit_and_loss
+      }
+    }
 
     chartPoints = rawData.map(d => ({
       time: d.timestamp,
-      value: d.day > minDay ? (d.profit_and_loss + offset) : d.profit_and_loss,
-      day: d.day 
+      value: d.profit_and_loss + cumulativeOffset[d.day],
+      day: d.day
     }))
   } else {
     chartPoints = rawData.map(d => ({ 

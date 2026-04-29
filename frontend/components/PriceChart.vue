@@ -392,7 +392,16 @@ const renderChart = (priceRaw, tradeData, internalData) => {
     const refKey = NORM_KEY[props.normalize]
     prc = priceRaw.map(d => {
       const ref = d[refKey]
-      if (ref == null) return null
+      if (ref == null) {
+        return {
+          ...d,
+          ask_price_1: null, ask_price_2: null, ask_price_3: null,
+          bid_price_1: null, bid_price_2: null, bid_price_3: null,
+          mid_price: null,
+          wallmid1: null, wallmid2: null, wallmidsma: null, wallmid3: null, wallmido: null,
+          _ref: null,
+        }
+      }
       return {
         ...d,
         ask_price_1: d.ask_price_1 - ref,
@@ -409,7 +418,7 @@ const renderChart = (priceRaw, tradeData, internalData) => {
         wallmido: d.wallmido != null ? d.wallmido - ref: null,
         _ref: ref,
       }
-    }).filter(Boolean)
+    })
   }
 
   const lineOpts = {
@@ -432,8 +441,8 @@ const renderChart = (priceRaw, tradeData, internalData) => {
     const bidKey = `bid_price_${lvl}`
     const askS = chart.addSeries(lc.LineSeries, { ...lineOpts, color: OB_COLORS.ask[lvl] })
     const bidS = chart.addSeries(lc.LineSeries, { ...lineOpts, color: OB_COLORS.bid[lvl] })
-    askS.setData(prc.filter(d => valid(d[askKey])).map(d => ({ time: d.timestamp, value: d[askKey] })))
-    bidS.setData(prc.filter(d => valid(d[bidKey])).map(d => ({ time: d.timestamp, value: d[bidKey] })))
+    askS.setData(prc.map(d => valid(d[askKey]) ? { time: d.timestamp, value: d[askKey] } : { time: d.timestamp }))
+    bidS.setData(prc.map(d => valid(d[bidKey]) ? { time: d.timestamp, value: d[bidKey] } : { time: d.timestamp }))
     series[`Ask${lvl}`] = askS
     series[`Bid${lvl}`] = bidS
   }
@@ -442,27 +451,27 @@ const renderChart = (priceRaw, tradeData, internalData) => {
 
   if (props.indicators.includes('Mid')) {
     series.Mid = chart.addSeries(lc.LineSeries, { ...lineOpts, color: '#000000' })
-    series.Mid.setData(prc.filter(d => valid(d.mid_price)).map(d => ({ time: d.timestamp, value: d.mid_price })))
+    series.Mid.setData(prc.map(d => valid(d.mid_price) ? { time: d.timestamp, value: d.mid_price } : { time: d.timestamp }))
   }
   if (props.indicators.includes('WallMid1')) {
     series.Wall1 = chart.addSeries(lc.LineSeries, { ...lineOpts, color: '#AA00FF', lineWidth: 1.5 })
-    series.Wall1.setData(prc.filter(d => valid(d.wallmid1)).map(d => ({ time: d.timestamp, value: d.wallmid1 })))
+    series.Wall1.setData(prc.map(d => valid(d.wallmid1) ? { time: d.timestamp, value: d.wallmid1 } : { time: d.timestamp }))
   }
   if (props.indicators.includes('WallMid2')) {
     series.Wall2 = chart.addSeries(lc.LineSeries, { ...lineOpts, color: '#00BFA5', lineWidth: 1.5 })
-    series.Wall2.setData(prc.filter(d => valid(d.wallmid2)).map(d => ({ time: d.timestamp, value: d.wallmid2 })))
+    series.Wall2.setData(prc.map(d => valid(d.wallmid2) ? { time: d.timestamp, value: d.wallmid2 } : { time: d.timestamp }))
   }
   if (props.indicators.includes('WallMid2 (SMA)')) {
     series.Wall2SMA = chart.addSeries(lc.LineSeries, { ...lineOpts, color: '#ff4297', lineWidth: 1.5 })
-    series.Wall2SMA.setData(prc.filter(d => valid(d.wallmidsma)).map(d => ({ time: d.timestamp, value: d.wallmidsma })))
+    series.Wall2SMA.setData(prc.map(d => valid(d.wallmidsma) ? { time: d.timestamp, value: d.wallmidsma } : { time: d.timestamp }))
   }
   if (props.indicators.includes('WallMid3')) {
     series.Wall3 = chart.addSeries(lc.LineSeries, { ...lineOpts, color: '#50ca54', lineWidth: 1.5 })
-    series.Wall3.setData(prc.filter(d => valid(d.wallmid3)).map(d => ({ time: d.timestamp, value: d.wallmid3 })))
+    series.Wall3.setData(prc.map(d => valid(d.wallmid3) ? { time: d.timestamp, value: d.wallmid3 } : { time: d.timestamp }))
   }
   if (props.indicators.includes('WallMidO')) {
     series.WallO = chart.addSeries(lc.LineSeries, { ...lineOpts, color: '#b91d92', lineWidth: 1.5 })
-    series.WallO  .setData(prc.filter(d => valid(d.wallmido)).map(d => ({ time: d.timestamp, value: d.wallmido })))
+    series.WallO.setData(prc.map(d => valid(d.wallmido) ? { time: d.timestamp, value: d.wallmido } : { time: d.timestamp }))
   }
 
   if (props.normalize !== 'None' && series.Ask) {
@@ -481,7 +490,8 @@ const renderChart = (priceRaw, tradeData, internalData) => {
       let ref = 0
       if (props.normalize !== 'None') {
         const match = prc.find(p => p.timestamp === t.timestamp)
-        if (match) ref = match._ref
+        if (!match || match._ref == null) return
+        ref = match._ref
       }
       const price = t.price - ref
       ;[t.buyer_class, t.seller_class].forEach(cls => {
@@ -496,7 +506,8 @@ const renderChart = (priceRaw, tradeData, internalData) => {
       let ref = 0
       if (props.normalize !== 'None') {
         const match = prc.find(p => p.timestamp === o.timestamp)
-        if (match) ref = match._ref
+        if (!match || match._ref == null) return
+        ref = match._ref
       }
       rawAlgoOb.push({ time: o.timestamp, price: o.order_price - ref, qty: o.order_quantity })
     })

@@ -2,63 +2,53 @@ import json
 import numpy as np
 from dataclasses import dataclass, field
 from typing import Literal
-from datamodel import TradingState, Order
+from datamodel import Order, TradingState
 
 Product = Literal["INTARIAN_PEPPER_ROOT", "ASH_COATED_OSMIUM"]
 
 POSITION_LIMITS = {"INTARIAN_PEPPER_ROOT": 80, "ASH_COATED_OSMIUM": 80}
 
-ACO_UNWIND_THRESHOLD = 10
-ACO_TAKE_PROFIT = 20
+ACO_UNWIND_THRESHOLD = 15
+ACO_TAKE_PROFIT = 30
 ACO_PRICE_OFFSET = 1
 ACO_PRC_SKEW1 = 1
 ACO_PRC_SKEW2 = 2
 ACO_SKEW_LEVEL2 = 65
 ACO_SKEW_LEVEL1 = 50
+ACO_MA_WINDOW = 10
+
+ACO_EQUILIBRIUM = round(10000.335408289651, 2)
+ACO_SIGMA = round(4.5557918760614236, 2)
 
 IPR_MIN_LONG = 75
 IPR_MIN_SHORT = -75
-IPR_REGWALL_INTERCEPT = round((12006.876025527785 + 11993.144067190733) / 2, 2)
 IPR_REGWALL_SLOPE = 0.1
 IPR_REGWALL_SAFETY_MARGIN = 3
 IPR_REGWALL_SAFETY_SLOPE = 0.03
 
-@dataclass
-class AlgoTrade:
-    timestamp: str
-    quantity: int
-    price: int
-    buyer: str | None
-    seller: str | None
     
 @dataclass 
-class PlacedOrder:
-    timestamp: str
-    quantity: int
-    price: int
-    buyer: str | None
-    seller: str | None 
-
-@dataclass 
-class InformedData:
+class RegressionData:
     ask_history: list[int] = field(default_factory=list)
     bid_history: list[int] = field(default_factory=list)
     current_slope: float | None = None
 
 @dataclass 
-class TraderData:
-    informed_data: InformedData = field(default_factory=InformedData)
-    algo_trades: list[AlgoTrade] = field(default_factory=list)
-    placed_orders: list[PlacedOrder] = field(default_factory=list)
+class MaData:
+    wallmid_history: list[float] = field(default_factory=list)
 
+@dataclass
+class TraderData:
+    regression_data: RegressionData = field(default_factory=RegressionData)
+    ma_data: MaData = field(default_factory=MaData)
+    
 
 class MarketTrader:
     def __init__(self, product, state):
         self.product = product 
         self.state = state 
         self.trader_data = self.get_trader_data()
-        self.append_algo_trades()
-    
+        
         self.position_limit = POSITION_LIMITS.get(self.product.upper(), 0)
         self.current_position = self.state.position.get(self.product.upper(), 0) 
 
@@ -70,12 +60,18 @@ class MarketTrader:
         self.best_bid_price, self.best_bid_volume = self.get_best_bid()
         self.best_ask_price, self.best_ask_volume = self.get_best_ask()
         
-        self.append_regwall_data()
         self.wall_mid = self.compute_wallmid()
-        self.regwall, _ = self.compute_regwall()
-
-        if not self.check_regwall(): self.regwall, self.trader_data.informed_data.current_slope = self.compute_regwall() #regwall ok against historical estimate
-        else: self.regwall, self.trader_data.informed_data.current_slope = self.check_regwall()
+        self.append_wallmid_history()
+        self.wallmid_ma = self.compute_wallmidma()
+        self.effective_mid = self.wallmid_ma if self.wallmid_ma is not None else self.wall_mid
+        self.zscore = self.compute_z()
+        
+        if self.product == "INTARIAN_PEPPER_ROOT":
+            self.append_regwall_data()
+            self.regwall, self.trader_data.regression_data.current_slope = self.compute_regwall()
+            result = self.check_regwall()
+            if result:
+                self.regwall, self.trader_data.regression_data.current_slope = result
     
     def get_trader_data(self) -> TraderData:
         if not self.state.traderData: return TraderData()
@@ -87,27 +83,12 @@ class MarketTrader:
         if not d:
             return TraderData()
         td = TraderData()
-        td.informed_data.ask_history = d["informed_data"]["ask_history"]
-        td.informed_data.bid_history = d["informed_data"]["bid_history"]
-        td.informed_data.current_slope = d["informed_data"]["current_slope"]
-        td.algo_trades = [AlgoTrade(**t) for t in d.get("algo_trades", [])]
+        td.regression_data.ask_history = d["regression_data"]["ask_history"]
+        td.regression_data.bid_history = d["regression_data"]["bid_history"]
+        td.regression_data.current_slope = d["regression_data"]["current_slope"]
+        td.ma_data.wallmid_history = d.get("ma_data", {}).get("wallmid_history", [])
         return td
     
-    def append_algo_trades(self) -> None:
-        incoming = self.state.own_trades.get(self.product, 0)
-        if incoming != 0:
-            for trade in self.state.own_trades[self.product]:
-                self.trader_data.algo_trades.append(AlgoTrade(
-                    timestamp=str(self.state.timestamp-100),
-                    quantity=trade.quantity,
-                    price=trade.price,
-                    buyer="SUBMISSION" if trade.buyer == "SUBMISSION" else "",
-                    seller="SUBMISSION" if trade.seller == "SUBMISSION" else ""
-                ))
-        
-        if len(self.trader_data.algo_trades) > 5:
-            self.trader_data.algo_trades = self.trader_data.algo_trades[-5:]
-
     def bid(self, bp, bv, orders) -> None:
         if int(bv) == 0: 
             return
@@ -136,38 +117,48 @@ class MarketTrader:
         wallmid = round((sell_wall + buy_wall) / 2, 2)
         return wallmid
     
+    def append_wallmid_history(self) -> None:
+        self.trader_data.ma_data.wallmid_history.append(self.wall_mid)
+        if len(self.trader_data.ma_data.wallmid_history) > ACO_MA_WINDOW * 2:
+            self.trader_data.ma_data.wallmid_history = self.trader_data.ma_data.wallmid_history[-ACO_MA_WINDOW:]
 
+    def compute_wallmidma(self) -> float | None:
+        history = self.trader_data.ma_data.wallmid_history
+        if len(history) >= ACO_MA_WINDOW:
+            window = history[-ACO_MA_WINDOW:]
+            return round(sum(window) / len(window), 2)
+        return None
+    
     def compute_regwall(self) -> float:
-        regwall = IPR_REGWALL_INTERCEPT + IPR_REGWALL_SLOPE * (self.state.timestamp / 100)
-        return regwall, IPR_REGWALL_SLOPE
+        return self.effective_mid, IPR_REGWALL_SLOPE
 
     def append_regwall_data(self) -> None:
         if not self.best_ask_price:
-            if self.trader_data.informed_data.ask_history:
-                self.trader_data.informed_data.ask_history.append(self.trader_data.informed_data.ask_history[-1])
+            if self.trader_data.regression_data.ask_history:
+                self.trader_data.regression_data.ask_history.append(self.trader_data.regression_data.ask_history[-1])
         else:            
-            self.trader_data.informed_data.ask_history.append(self.best_ask_price)
+            self.trader_data.regression_data.ask_history.append(self.best_ask_price)
         
         if not self.best_bid_price:
-            if self.trader_data.informed_data.bid_history:
-                self.trader_data.informed_data.bid_history.append(self.trader_data.informed_data.bid_history[-1]) 
+            if self.trader_data.regression_data.bid_history:
+                self.trader_data.regression_data.bid_history.append(self.trader_data.regression_data.bid_history[-1]) 
         else:
-            self.trader_data.informed_data.bid_history.append(self.best_bid_price)
+            self.trader_data.regression_data.bid_history.append(self.best_bid_price)
         
-        if len(self.trader_data.informed_data.ask_history) > 200:
-            self.trader_data.informed_data.ask_history = self.trader_data.informed_data.ask_history[-150:]
+        if len(self.trader_data.regression_data.ask_history) > 200:
+            self.trader_data.regression_data.ask_history = self.trader_data.regression_data.ask_history[-150:]
         
-        if len(self.trader_data.informed_data.bid_history) > 200:
-            self.trader_data.informed_data.bid_history = self.trader_data.informed_data.bid_history[-150:]
+        if len(self.trader_data.regression_data.bid_history) > 200:
+            self.trader_data.regression_data.bid_history = self.trader_data.regression_data.bid_history[-150:]
 
     def check_regwall(self) -> bool | list[bool, float | None]:
-        if len(self.trader_data.informed_data.ask_history) >= 100 and len(self.trader_data.informed_data.bid_history) >= 100:
-            available_len = min(len(self.trader_data.informed_data.ask_history), len(self.trader_data.informed_data.bid_history))
+        if len(self.trader_data.regression_data.ask_history) >= 100 and len(self.trader_data.regression_data.bid_history) >= 100:
+            available_len = min(len(self.trader_data.regression_data.ask_history), len(self.trader_data.regression_data.bid_history))
             X = [i for i in range(1, available_len+1)]
             X = np.column_stack([np.ones(len(X)), X]) #create a 2D array for the reg
             
-            Ya = np.array(self.trader_data.informed_data.ask_history[:available_len])
-            Yb = np.array(self.trader_data.informed_data.bid_history[:available_len])
+            Ya = np.array(self.trader_data.regression_data.ask_history[:available_len])
+            Yb = np.array(self.trader_data.regression_data.bid_history[:available_len])
             beta_a = np.linalg.lstsq(X, Ya, rcond=None)[0] 
             beta_b = np.linalg.lstsq(X, Yb, rcond=None)[0]
             
@@ -180,12 +171,18 @@ class MarketTrader:
 
             if abs(computed_regwall_slope_a - computed_regwall_slope_b) < IPR_REGWALL_SAFETY_SLOPE:
                 if abs(self.regwall - computed_regwall) < IPR_REGWALL_SAFETY_MARGIN: return False #OK
-                else: return computed_regwall, avg_slope #not ok return new regwall we are certain about new SLOPE
-            else: return computed_regwall, None #very bad slopes do not match algo is stale  
+                else:
+                    return computed_regwall, avg_slope #not ok return new regwall we are certain about new SLOPE
+            else:
+                return computed_regwall, None #very bad slopes do not match algo is stale  
         else: return False #cant mark as false just because data is missing
+    
+    def compute_z(self) -> float:
+        z_score = (self.wall_mid - ACO_EQUILIBRIUM) / ACO_SIGMA
+        return z_score
 
 
-class InformedMaker(MarketTrader):
+class MeanReversionMaker(MarketTrader):
     def __init__(self, product, state):
         super().__init__(product, state)
 
@@ -194,31 +191,56 @@ class InformedMaker(MarketTrader):
         if not self.has_book:
             return {self.product: orders}
 
+        allowed_long = POSITION_LIMITS["ASH_COATED_OSMIUM"] - self.current_position
+        allowed_short = POSITION_LIMITS["ASH_COATED_OSMIUM"] + self.current_position
+        delta_pos = 0
+
         # TAKING ALL PROFITABLE
         if self.current_position < ACO_TAKE_PROFIT:
             for sp, sv in self.sell_orders.items():
-                if int(sp) < self.wall_mid:
+                if int(sp) < self.effective_mid:
                     self.bid(sp, sv, orders)
+                    allowed_long -= abs(sv)
+                    delta_pos += abs(sv)
         
         if self.current_position > -ACO_TAKE_PROFIT:
             for bp, bv in self.buy_orders.items():
-                if int(bp) > self.wall_mid:
+                if int(bp) > self.effective_mid:
                     self.ask(bp, bv, orders)
+                    allowed_short -= bv
+                    delta_pos -= bv
 
         #ACTIVE UNWINDING AT EDGE = 0
-        if self.current_position > ACO_UNWIND_THRESHOLD:
-            for bp, bv in self.buy_orders.items():
-                if int(bp) >= int(self.wall_mid):
-                    self.ask(bp, bv, orders)
+        if allowed_short > 0:
+            if self.current_position > ACO_UNWIND_THRESHOLD:
+                for bp, bv in self.buy_orders.items():
+                    if int(bp) >= int(self.effective_mid):
+                        self.ask(bp, bv, orders)
+                        allowed_short -= bv
+                        delta_pos =- bv
 
-        elif self.current_position < -ACO_UNWIND_THRESHOLD:
-            for sp, sv in self.sell_orders.items():
-                if int(sp) <= int(self.wall_mid):
-                    self.bid(sp, sv, orders)
+        if allowed_long > 0:
+            if self.current_position < -ACO_UNWIND_THRESHOLD:
+                for sp, sv in self.sell_orders.items():
+                    if int(sp) <= int(self.effective_mid):
+                        self.bid(sp, sv, orders)
+                        allowed_long -= abs(sv)
+                        delta_pos =+ abs(sv)
 
-        ##MAKING MARKET
-        skew_rate = self.current_position / self.position_limit 
-        match self.current_position:
+        ##MAKING MARKET + MR 
+        expected_position = self.current_position + delta_pos
+        skew_rate = expected_position / POSITION_LIMITS["ASH_COATED_OSMIUM"]
+        
+        #scale skew with Z logic:
+        """
+            IF Z is very negative this indicates we are about to mean revert back to equilibrium (GO LONGER)
+                -> Z skew becomes negative  
+            IF Z is very positive this indicates we are about to mean revert back to equilibrium (GO SHORTER)
+                -> Z skew becomes positive 
+        """
+        z_skew = int(round(self.zscore, 2)) 
+
+        match expected_position:
                 case s if s > ACO_SKEW_LEVEL2:
                     ask_skew = -ACO_PRC_SKEW2 #decrease ask to sell more
                 case s if s > ACO_SKEW_LEVEL1:
@@ -226,31 +248,36 @@ class InformedMaker(MarketTrader):
                 case _:
                     ask_skew = 0
 
-        match self.current_position:
+        match expected_position:
             case s if s < -ACO_SKEW_LEVEL2:
                 bid_skew = ACO_PRC_SKEW2 #increase bid to buy more
             case s if s < -ACO_SKEW_LEVEL1:
                 bid_skew = ACO_PRC_SKEW1
             case _:
                 bid_skew = 0
-    
-        ask_price = self.best_ask_price - ACO_PRICE_OFFSET + ask_skew
-        bid_price = self.best_bid_price + ACO_PRICE_OFFSET + bid_skew
-        ask_price = max(ask_price, int(self.wall_mid)) 
-        bid_price = min(bid_price, int(self.wall_mid))
-            
-        if int(self.best_ask_price - 1) > self.wall_mid:
-            vol_order = ((self.position_limit - abs(self.current_position)) / 2) * (1+skew_rate)
-            self.ask(ask_price, vol_order, orders)
+
+        #Z skew increases ask and bid to sell less and buy more if Z indicates we should be long
+        #Z skew decreases ask and bid to sell more and buy less if Z indicates we should be short
+
+        ask_price = self.best_ask_price - ACO_PRICE_OFFSET + ask_skew - z_skew 
+        bid_price = self.best_bid_price + ACO_PRICE_OFFSET + bid_skew - z_skew 
+        ask_price = max(ask_price, int(self.effective_mid)) 
+        bid_price = min(bid_price, int(self.effective_mid))
         
-        if int(self.best_bid_price + 1) < self.wall_mid:
-            vol_order = ((self.position_limit - abs(self.current_position)) / 2) * (1-skew_rate)
-            self.bid(bid_price, vol_order, orders)
+        if allowed_short > 0:
+            if int(self.best_ask_price - 1) > self.effective_mid:
+                vol_order = ((self.position_limit - abs(self.current_position)) / 2) * (1+skew_rate)
+                self.ask(ask_price, vol_order, orders)
+        
+        if allowed_long > 0:
+            if int(self.best_bid_price + 1) < self.effective_mid:
+                vol_order = ((self.position_limit - abs(self.current_position)) / 2) * (1-skew_rate)
+                self.bid(bid_price, vol_order, orders)
         
         return {self.product: orders}
 
 
-class BasicMaker(MarketTrader):
+class LongMaker(MarketTrader):
     def __init__(self, product, state):
         super().__init__(product, state)
 
@@ -261,7 +288,7 @@ class BasicMaker(MarketTrader):
         
         allowed_short = POSITION_LIMITS["INTARIAN_PEPPER_ROOT"] + self.current_position
         allowed_long = POSITION_LIMITS["INTARIAN_PEPPER_ROOT"] - self.current_position
-        current_slope = self.trader_data.informed_data.current_slope
+        current_slope = self.trader_data.regression_data.current_slope
 
         #CHECK if IN EXPECTED TREND or NOT
         if not current_slope:
@@ -333,21 +360,22 @@ class BasicMaker(MarketTrader):
 
 
 class Trader:
+    
+    def bid(self):
+        return 1
 
     def encode_trader_data(self, outgoing: dict) -> str:
         raw = {}
         for product, td in outgoing.items():
             raw[product] = {
-                "informed_data": {
-                    "ask_history": td.informed_data.ask_history,
-                    "bid_history": td.informed_data.bid_history,
-                    "current_slope": td.informed_data.current_slope,
+                "regression_data": {
+                    "ask_history": td.regression_data.ask_history,
+                    "bid_history": td.regression_data.bid_history,
+                    "current_slope": td.regression_data.current_slope,
                 },
-                "algo_trades": [
-                    {"timestamp": t.timestamp, "quantity": t.quantity, "price": t.price,
-                    "buyer": t.buyer, "seller": t.seller}
-                    for t in td.algo_trades
-                ],
+                "ma_data": {
+                    "wallmid_history": td.ma_data.wallmid_history,
+                },
             }
         return json.dumps(raw)
 
@@ -357,8 +385,8 @@ class Trader:
         outgoing = {}
 
         traders = {
-            "ASH_COATED_OSMIUM": InformedMaker,
-            "INTARIAN_PEPPER_ROOT": BasicMaker
+            "ASH_COATED_OSMIUM": MeanReversionMaker,
+            "INTARIAN_PEPPER_ROOT": LongMaker
         }
         for product, TraderClass in traders.items():
             trader_instance = TraderClass(product, state)

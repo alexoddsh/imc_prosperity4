@@ -38,14 +38,16 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
             #internal data
             ied={}
             day = -3
+            day_index = -1
             i = 0
             for line in id_lines:
                 if line.startswith("B"): #backtesting log
                     day += 1
+                    day_index += 1
                 elif line.strip().startswith("[DATA] "):
                     payload = line.strip().removeprefix("[DATA] ")
                     if payload.startswith("{"):
-                        ied[(i, day)] = payload
+                        ied[(i, day, day_index)] = payload
                         i += 1
                 
             internal = pd.DataFrame(columns=["timestamp", "product", "order_price", "order_quantity"])
@@ -77,7 +79,7 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
             for entry in ied:
                 payload = entry.get("lambdaLog", "")
                 if payload and payload.strip().startswith("{"):
-                    raw_logs[(i, day)] = payload
+                    raw_logs[(i, day, 0)] = payload
                     i += 1
             
             internal = pd.DataFrame(columns=["timestamp", "product", "order_price", "order_quantity"])

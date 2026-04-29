@@ -13,6 +13,10 @@ import yaml
 import pandas as pd
 from dotenv import load_dotenv
 import platform
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
 
 load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 
@@ -167,6 +171,88 @@ def run_single(year: int, round_id: str, combo_params: dict, before: str, after:
     return total_pnl, product_pnls, duration
 
 
+def plot_results(csv_path: Path, param_names: list[str]):
+    df = pd.read_csv(csv_path)
+    n = len(param_names)
+    plot_path = csv_path.with_suffix(".png")
+
+    if n == 1:
+        p = param_names[0]
+        grouped = df.groupby(p)["total_pnl"].mean().reset_index().sort_values(p)
+        fig, ax = plt.subplots(figsize=(max(6, len(grouped) * 0.6), 5))
+        colors = ["#d73027" if v < 0 else "#1a9850" for v in grouped["total_pnl"]]
+        bars = ax.bar(grouped[p].astype(str), grouped["total_pnl"], color=colors, edgecolor="white", linewidth=0.5)
+        ax.axhline(0, color="white", linewidth=0.8, alpha=0.5)
+        ax.set_xlabel(p, color="white")
+        ax.set_ylabel("PnL", color="white")
+        ax.set_title(f"PnL by {p}", color="white", fontweight="bold")
+        ax.tick_params(colors="white")
+        for spine in ax.spines.values():
+            spine.set_edgecolor("#444")
+        fig.patch.set_facecolor("#1e1e2e")
+        ax.set_facecolor("#2a2a3e")
+        fig.tight_layout()
+        fig.savefig(plot_path, dpi=130)
+        plt.close(fig)
+        print(f"[GRID] Heatmap saved: {plot_path}")
+        return
+
+    # build all pairs for heatmaps
+    pairs = list(itertools.combinations(param_names, 2))
+    ncols = min(3, len(pairs))
+    nrows = (len(pairs) + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows, ncols, figsize=(7 * ncols, 6 * nrows), squeeze=False)
+    fig.patch.set_facecolor("#1e1e2e")
+
+    for idx, (px, py) in enumerate(pairs):
+        ax = axes[idx // ncols][idx % ncols]
+        pivot = df.groupby([px, py])["total_pnl"].mean().reset_index()
+        xs = sorted(pivot[px].unique())
+        ys = sorted(pivot[py].unique())
+        matrix = np.full((len(ys), len(xs)), np.nan)
+        xi_map = {v: i for i, v in enumerate(xs)}
+        yi_map = {v: i for i, v in enumerate(ys)}
+        for _, row in pivot.iterrows():
+            matrix[yi_map[row[py]], xi_map[row[px]]] = row["total_pnl"]
+
+        vmax = np.nanmax(np.abs(matrix)) or 1
+        im = ax.imshow(matrix, cmap="RdYlGn", vmin=-vmax, vmax=vmax, aspect="auto", origin="lower")
+
+        ax.set_xticks(range(len(xs)))
+        ax.set_xticklabels([str(x) for x in xs], rotation=45, ha="right", color="white", fontsize=8)
+        ax.set_yticks(range(len(ys)))
+        ax.set_yticklabels([str(y) for y in ys], color="white", fontsize=8)
+        ax.set_xlabel(px, color="white", fontsize=9)
+        ax.set_ylabel(py, color="white", fontsize=9)
+        title = f"{px} vs {py}"
+        if n > 2:
+            title += "\n(avg over other params)"
+        ax.set_title(title, color="white", fontsize=10, fontweight="bold")
+        ax.set_facecolor("#2a2a3e")
+
+        # annotate cells
+        for yi in range(len(ys)):
+            for xi in range(len(xs)):
+                v = matrix[yi, xi]
+                if not np.isnan(v):
+                    text_color = "black" if abs(v) < vmax * 0.6 else "white"
+                    ax.text(xi, yi, f"{v:.0f}", ha="center", va="center", fontsize=7, color=text_color)
+
+        cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        cb.ax.yaxis.set_tick_params(color="white")
+        plt.setp(cb.ax.yaxis.get_ticklabels(), color="white")
+
+    # hide unused axes
+    for idx in range(len(pairs), nrows * ncols):
+        axes[idx // ncols][idx % ncols].set_visible(False)
+
+    fig.suptitle("Grid Search — PnL Heatmap", color="white", fontsize=14, fontweight="bold", y=1.01)
+    fig.tight_layout()
+    fig.savefig(plot_path, dpi=130, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[GRID] Heatmap saved: {plot_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Grid search over algo parameters")
     parser.add_argument("--config", help="Path to YAML config file")
@@ -275,6 +361,8 @@ def main():
     best_str = ", ".join(f"{k}={best_combo[k]}" for k in param_names)
     print(f"[GRID] Done. Best: run {best_id} | PNL: {best_pnl:.1f} | {{{best_str}}}")
     print(f"[GRID] Results: {out_path}")
+
+    plot_results(out_path, param_names)
 
 
 if __name__ == "__main__":

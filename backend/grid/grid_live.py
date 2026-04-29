@@ -6,10 +6,9 @@ from typing import List, Dict, Any, Callable, Generator
 from io import BytesIO, TextIOWrapper, StringIO
 from pycognito import Cognito
 import httpx
-import csv
 from enum import IntEnum
 import pandas as pd
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ValidationError
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -236,7 +235,7 @@ def main(email: str, password: str):
                         files=files
                     )
                     if res.status_code == 429:
-                        print(f"Waiting for earlier submission to finish")
+                        print("Waiting for earlier submission to finish")
                         time.sleep(30)
                         continue
                     elif res.status_code == 201 or res.status_code == 200:

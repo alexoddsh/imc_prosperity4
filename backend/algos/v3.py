@@ -8,13 +8,14 @@ Product = Literal["INTARIAN_PEPPER_ROOT", "ASH_COATED_OSMIUM"]
 
 POSITION_LIMITS = {"INTARIAN_PEPPER_ROOT": 80, "ASH_COATED_OSMIUM": 80}
 
-ACO_UNWIND_THRESHOLD = 10
-ACO_TAKE_PROFIT = 20
+ACO_UNWIND_THRESHOLD = 15
+ACO_TAKE_PROFIT = 30
 ACO_PRICE_OFFSET = 1
 ACO_PRC_SKEW1 = 1
 ACO_PRC_SKEW2 = 2
 ACO_SKEW_LEVEL2 = 65
 ACO_SKEW_LEVEL1 = 50
+ACO_MA_WINDOW = 10
 
 IPR_MIN_LONG = 75
 IPR_MIN_SHORT = -75
@@ -46,8 +47,13 @@ class InformedData:
     current_slope: float | None = None
 
 @dataclass 
+class MaData:
+    wallmid_history: list[float] = field(default_factory=list)
+
+@dataclass
 class TraderData:
     informed_data: InformedData = field(default_factory=InformedData)
+    ma_data: MaData = field(default_factory=MaData)
     algo_trades: list[AlgoTrade] = field(default_factory=list)
     placed_orders: list[PlacedOrder] = field(default_factory=list)
 
@@ -70,12 +76,16 @@ class MarketTrader:
         self.best_bid_price, self.best_bid_volume = self.get_best_bid()
         self.best_ask_price, self.best_ask_volume = self.get_best_ask()
         
-        self.append_regwall_data()
-        self.wall_mid = self.compute_wallmid()
-        self.regwall, _ = self.compute_regwall()
-
-        if not self.check_regwall(): self.regwall, self.trader_data.informed_data.current_slope = self.compute_regwall() #regwall ok against historical estimate
-        else: self.regwall, self.trader_data.informed_data.current_slope = self.check_regwall()
+        self.effective_mid = self.compute_wallmid()
+        self.append_wallmid_history()
+        self.wallmid_ma = self.compute_wallmidma()
+        self.effective_mid = self.wallmid_ma if self.wallmid_ma is not None else self.effective_mid
+        
+        if self.product == "INTARIAN_PEPPER_ROOT":
+            self.append_regwall_data()
+            self.regwall, _ = self.compute_regwall()
+            if not self.check_regwall(): self.regwall, self.trader_data.informed_data.current_slope = self.compute_regwall() #regwall ok against historical estimate
+            else: self.regwall, self.trader_data.informed_data.current_slope = self.check_regwall()
     
     def get_trader_data(self) -> TraderData:
         if not self.state.traderData: return TraderData()
@@ -90,6 +100,7 @@ class MarketTrader:
         td.informed_data.ask_history = d["informed_data"]["ask_history"]
         td.informed_data.bid_history = d["informed_data"]["bid_history"]
         td.informed_data.current_slope = d["informed_data"]["current_slope"]
+        td.ma_data.wallmid_history = d.get("ma_data", {}).get("wallmid_history", [])
         td.algo_trades = [AlgoTrade(**t) for t in d.get("algo_trades", [])]
         return td
     
@@ -136,7 +147,18 @@ class MarketTrader:
         wallmid = round((sell_wall + buy_wall) / 2, 2)
         return wallmid
     
+    def append_wallmid_history(self) -> None:
+        self.trader_data.ma_data.wallmid_history.append(self.effective_mid)
+        if len(self.trader_data.ma_data.wallmid_history) > ACO_MA_WINDOW * 2:
+            self.trader_data.ma_data.wallmid_history = self.trader_data.ma_data.wallmid_history[-ACO_MA_WINDOW:]
 
+    def compute_wallmidma(self) -> float | None:
+        history = self.trader_data.ma_data.wallmid_history
+        if len(history) >= ACO_MA_WINDOW:
+            window = history[-ACO_MA_WINDOW:]
+            return round(sum(window) / len(window), 2)
+        return None
+    
     def compute_regwall(self) -> float:
         regwall = IPR_REGWALL_INTERCEPT + IPR_REGWALL_SLOPE * (self.state.timestamp / 100)
         return regwall, IPR_REGWALL_SLOPE
@@ -180,8 +202,10 @@ class MarketTrader:
 
             if abs(computed_regwall_slope_a - computed_regwall_slope_b) < IPR_REGWALL_SAFETY_SLOPE:
                 if abs(self.regwall - computed_regwall) < IPR_REGWALL_SAFETY_MARGIN: return False #OK
-                else: return computed_regwall, avg_slope #not ok return new regwall we are certain about new SLOPE
-            else: return computed_regwall, None #very bad slopes do not match algo is stale  
+                else:
+                    return computed_regwall, avg_slope #not ok return new regwall we are certain about new SLOPE
+            else:
+                return computed_regwall, None #very bad slopes do not match algo is stale  
         else: return False #cant mark as false just because data is missing
 
 
@@ -197,23 +221,23 @@ class InformedMaker(MarketTrader):
         # TAKING ALL PROFITABLE
         if self.current_position < ACO_TAKE_PROFIT:
             for sp, sv in self.sell_orders.items():
-                if int(sp) < self.wall_mid:
+                if int(sp) < self.effective_mid:
                     self.bid(sp, sv, orders)
         
         if self.current_position > -ACO_TAKE_PROFIT:
             for bp, bv in self.buy_orders.items():
-                if int(bp) > self.wall_mid:
+                if int(bp) > self.effective_mid:
                     self.ask(bp, bv, orders)
 
         #ACTIVE UNWINDING AT EDGE = 0
         if self.current_position > ACO_UNWIND_THRESHOLD:
             for bp, bv in self.buy_orders.items():
-                if int(bp) >= int(self.wall_mid):
+                if int(bp) >= int(self.effective_mid):
                     self.ask(bp, bv, orders)
 
         elif self.current_position < -ACO_UNWIND_THRESHOLD:
             for sp, sv in self.sell_orders.items():
-                if int(sp) <= int(self.wall_mid):
+                if int(sp) <= int(self.effective_mid):
                     self.bid(sp, sv, orders)
 
         ##MAKING MARKET
@@ -236,14 +260,14 @@ class InformedMaker(MarketTrader):
     
         ask_price = self.best_ask_price - ACO_PRICE_OFFSET + ask_skew
         bid_price = self.best_bid_price + ACO_PRICE_OFFSET + bid_skew
-        ask_price = max(ask_price, int(self.wall_mid)) 
-        bid_price = min(bid_price, int(self.wall_mid))
+        ask_price = max(ask_price, int(self.effective_mid)) 
+        bid_price = min(bid_price, int(self.effective_mid))
             
-        if int(self.best_ask_price - 1) > self.wall_mid:
+        if int(self.best_ask_price - 1) > self.effective_mid:
             vol_order = ((self.position_limit - abs(self.current_position)) / 2) * (1+skew_rate)
             self.ask(ask_price, vol_order, orders)
         
-        if int(self.best_bid_price + 1) < self.wall_mid:
+        if int(self.best_bid_price + 1) < self.effective_mid:
             vol_order = ((self.position_limit - abs(self.current_position)) / 2) * (1-skew_rate)
             self.bid(bid_price, vol_order, orders)
         
@@ -342,6 +366,9 @@ class Trader:
                     "ask_history": td.informed_data.ask_history,
                     "bid_history": td.informed_data.bid_history,
                     "current_slope": td.informed_data.current_slope,
+                },
+                "ma_data": {
+                    "wallmid_history": td.ma_data.wallmid_history,
                 },
                 "algo_trades": [
                     {"timestamp": t.timestamp, "quantity": t.quantity, "price": t.price,

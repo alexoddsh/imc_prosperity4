@@ -1,11 +1,17 @@
-algo_file: v1.py
+algo_file: v3.py
 round: "1"
 year: "4"
+products: ["ASH_COATED_OSMIUM", "INTARIAN_PEPPER_ROOT"]
 
 params:
-  IPR_MIN_LONG: [50, 60, 70]
-  IPR_ASK_SKEW_VOL: [5, 10, 20]
-  
+  ACO_UNWIND_THRESHOLD: [15]
+  ACO_TAKE_PROFIT: [30]
+  ACO_PRICE_OFFSET: [1]
+  ACO_PRC_SKEW1: [1, 2]
+  ACO_PRC_SKEW2: [2, 3]
+  ACO_SKEW_LEVEL1: [50]
+  ACO_SKEW_LEVEL2: [65]
+  ACO_MA_WINDOW: [5, 10]
   
   
   
