@@ -214,7 +214,8 @@ async def proccess_json(file: UploadFile = File(...), algo_file: str = Form(...)
             "year": "4"
         }).execute()
         
-        print("  [UPLOAD]: Attempting to parse log file")        
+        print("  [UPLOAD]: Attempting to parse log file")
+        print("HELLLLO")     
         if process_results(task_id, file_path, None, SystemEnum.PROSPERITY) == 0:
             raise Exception("Parser returned 0")
         

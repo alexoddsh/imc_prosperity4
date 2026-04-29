@@ -173,8 +173,17 @@ def process_results(task_id: str, log_path: Path, stream_log: Path | None, syste
             trades['quantity'] = trades['quantity'].fillna(0).astype('int16')
         if 'algo_position' in trades.columns:
             trades['algo_position'] = trades['algo_position'].fillna(0).astype('int16')
+
         
-        
+        ###
+        try:
+            entry = trades[trades["buyer"] == "SUBMISSION"].iloc[0:,].loc[:, ["price"]]
+            ENTRY = entry.values[0][0]
+            entryList = [ENTRY.astype(dtype=float) for _ in range(0, len(prices.index))]
+            prices["fair_value"] = np.array(entryList) + prices["profit_and_loss"]
+        except Exception as e:
+            pass
+
         TRADE_COLS = ['backtest_id', 'timestamp', 'symbol', 'price', 'quantity', 'buyer', 'seller', 'buyer_class', 'seller_class', 'algo_position', 'day']
         trades = trades[[c for c in TRADE_COLS if c in trades.columns]]
 
